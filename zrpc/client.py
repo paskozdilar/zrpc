@@ -49,9 +49,6 @@ class Client:
             raise RPCError('Service "%s" already connected' % socket_name)
 
         socket_path = os.path.join(socket_dir, socket_name)
-        socket_mode = os.stat(socket_path).st_mode
-        if not stat.S_ISSOCK(socket_mode):
-            raise RPCError('Service "%s" unavailable' % socket_name)
 
         socket = context.socket(zmq.REQ)
         socket.connect('ipc://' + socket_path)
@@ -72,7 +69,7 @@ class Client:
         self._poller.unregister(socket)
         logger.debug('Disconnected from "%s"' % socket_name)
 
-    def call(self, service, method, payload, timeout=None):
+    def call(self, service, method, payload=None, timeout=None):
         """
         Call an RPC method of a service with a payload.
         If timeout is None, blocks indefinitely.
@@ -98,7 +95,7 @@ class Client:
         iter_timeout = 1
         while (current_time - start_time) < timeout:
             socket.send(request)
-            timeout_ms = 1000 * min(iter_timeout, timeout - (current_time - start_time))
+            timeout_ms = 1000 * max(0, min(iter_timeout, timeout - (current_time - start_time)))
             events = dict(self._poller.poll(timeout=timeout_ms))
 
             if socket in events:
