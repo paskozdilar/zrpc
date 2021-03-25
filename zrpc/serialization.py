@@ -18,7 +18,7 @@ Module API:
 import typing
 import msgpack
 
-from zrpc.utils.exceptions import SerializationError
+from zrpc.exceptions import SerializationError
 
 
 JSON = typing.Union[

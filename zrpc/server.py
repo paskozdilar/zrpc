@@ -9,8 +9,8 @@ import logging
 import os
 import re
 import zmq
-from zrpc.utils.exceptions import ConnectError
-from zrpc.utils.serialization import serialize, deserialize
+from zrpc.exceptions import ConnectError
+from zrpc.serialization import serialize, deserialize
 
 
 logger = logging.getLogger(__name__)

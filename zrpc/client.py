@@ -10,12 +10,12 @@ import stat
 import time
 import uuid
 import zmq
-from zrpc.utils.exceptions import (
+from zrpc.exceptions import (
         ConnectError,
         RPCError,
         RPCTimeoutError,
 )
-from zrpc.utils.serialization import serialize, deserialize
+from zrpc.serialization import serialize, deserialize
 
 
 logger = logging.getLogger(__name__)
