@@ -46,7 +46,9 @@ def test_reliability_client():
     rpc_event = multiprocessing.Event()
 
     with tempfile.TemporaryDirectory() as tempdir:
+
         def run_server():
+
             class MockServer(Server):
                 @rpc_method
                 def mock_method(self, payload):
@@ -55,6 +57,7 @@ def test_reliability_client():
                         sys.exit(1)
                     else:
                         return {'success': True}
+
             connect_event.set()
             MockServer(socket_dir=tempdir).run()
 
