@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from zrpc.utils.serialization import loads, dumps
+from zrpc.utils.serialization import serialize, deserialize
 
 
 
@@ -20,7 +20,7 @@ def test_builtin():
     )
     
     for data in dataset:
-        assert data == loads(dumps(data))
+        assert data == deserialize(serialize(data))
 
 
 def test_containers():
@@ -50,7 +50,7 @@ def test_containers():
     )
 
     for data in dataset:
-        assert data == loads(dumps(data))
+        assert data == deserialize(serialize(data))
 
 
 def test_compount_objects():
@@ -83,4 +83,4 @@ def test_compount_objects():
     )
 
     for data in dataset:
-        assert data == loads(dumps(data))
+        assert data == deserialize(serialize(data))
