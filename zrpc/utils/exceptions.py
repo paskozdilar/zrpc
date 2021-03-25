@@ -3,9 +3,21 @@ This module contains ZRPC-specific exceptions.
 """
 
 
-class EncodeError(ValueError):
-    pass
+class ZRPCBaseError(Exception):
+    """ Base class for all ZRPC exceptions """
 
 
-class DecodeError(TypeError):
-    pass
+class SerializationError(ZRPCBaseError):
+    """ Raised on serialization error """
+
+
+class ConnectError(ZRPCBaseError):
+    """ Raised on bind/connect error """
+
+
+class RPCError(ZRPCBaseError):
+    """ Raised on RPC method call exception """
+
+
+class RPCTimeoutError(RPCError):
+    """ Raised on RPC method call timeout """

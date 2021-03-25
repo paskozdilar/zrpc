@@ -8,19 +8,17 @@ The rest of the ZRPC shall *only* use `serializer.dumps()` and
 
 Module API:
 
-    - dumps(obj) -> bytes
+    - serialize(obj) -> bytes
         Serialize JSON-serializable object into bytes.
 
-    - loads(bytes) -> obj
+    - deserialize(bytes) -> obj
         Deserialize bytes into JSON-serializable object.
 """
 
 import typing
 import msgpack
-from .exceptions import (
-        EncodeError,
-        DecodeError,
-)
+
+from zrpc.utils.exceptions import SerializationError
 
 
 JSON = typing.Union[
@@ -34,14 +32,14 @@ JSON = typing.Union[
 ]
 
 
-def dumps(obj: JSON) -> bytes:
+def serialize(obj: JSON) -> bytes:
     try:
         return msgpack.dumps(obj)
     except (TypeError, ValueError) as exc:
-        raise EncodeError('Cannot encode object') from exc
+        raise SerializationError('Cannot encode object') from exc
 
 
-def loads(data: bytes) -> JSON:
+def deserialize(data: bytes) -> JSON:
     try:
         return msgpack.loads(data)
     except (UnicodeDecodeError,
@@ -49,4 +47,4 @@ def loads(data: bytes) -> JSON:
             msgpack.exceptions.ExtraData,
             msgpack.exceptions.FormatError,
             msgpack.exceptions.StackError) as exc:
-        raise DecodeError('Cannot decode object') from exc
+        raise SerializationError('Cannot decode object') from exc
