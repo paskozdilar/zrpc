@@ -54,7 +54,7 @@ class Client:
         socket.connect('ipc://' + socket_path)
         sockets[socket_name] = socket
 
-        self._poller.register(socket)
+        self._poller.register(socket, zmq.POLLIN)
         logger.debug('Connected to "%s"' % socket_name)
 
     def __disconnect(self, socket_name):
@@ -96,6 +96,7 @@ class Client:
         while (current_time - start_time) < timeout:
             socket.send(request)
             timeout_ms = 1000 * max(0, min(iter_timeout, timeout - (current_time - start_time)))
+            logging.debug('Polling sockets with {}ms timeout'.format(timeout_ms))
             events = dict(self._poller.poll(timeout=timeout_ms))
 
             if socket in events:
@@ -105,7 +106,6 @@ class Client:
             self.__disconnect(service)
             self.__connect(service)
             socket = sockets[service]
-            iter_timeout += 1
 
         if socket not in events:
             raise RPCTimeoutError('Service "%s" not responding' % service)

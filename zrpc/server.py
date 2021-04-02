@@ -5,6 +5,7 @@ Subclass the `Server` class and use the `rpc_method` decorator to make the
 method available to ZRPC clients.
 """
 
+import collections
 import logging
 import os
 import re
@@ -14,6 +15,27 @@ from zrpc.serialization import serialize, deserialize
 
 
 logger = logging.getLogger(__name__)
+
+
+class _RPCCache(collections.OrderedDict):
+
+    def __init__(self, maxsize=128, /, *args, **kwds):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwds)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            oldest = next(iter(self))
+            del self[oldest]
+
 
 
 class Server:
@@ -29,6 +51,8 @@ class Server:
 
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
+        poller = zmq.Poller()
+
         socket_path = os.path.join(socket_dir, name)
 
         try:
@@ -37,44 +61,96 @@ class Server:
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Server init error') from exc
 
+        poller.register(socket, zmq.POLLIN)
+
+        if self._rpc_methods is None:
+            self._rpc_methods = {}
+
         for method in self._rpc_methods.keys():
             logger.info('Registered RPC method: "%s"' % method)
 
         self._context = context
         self._socket = socket
+        self._poller = poller
+
+        self._cache = _RPCCache(maxsize=10)
+        self._fd_callbacks = {}
+
+    def register(self, fd, callback):
+        """
+        Register file-like object `fd` with `callback` callable.
+
+        The `callback` callable will be called when data is READY TO BE READ
+        from `fd` file descriptor.
+
+        ZRPC SERVICE WILL *NOT* READ ANY DATA FROM THE FILE DESCRIPTOR.
+        That is the responsibility of the `callback` callable.
+        """
+        self._fd_callbacks[fd] = callback
+        self._poller.register(fd, zmq.POLLIN)
+
+    def unregister(self, fd):
+        """ Unregister file-like object `fd`. """
+        self._fd_callbacks.pop(fd)
+        self._poller.unregister(fd, zmq.POLLIN)
 
     def run(self):
-        socket = self._socket
         logger.info('Entering main loop...')
-
         while True:
-            request_data = socket.recv()
-            logger.debug('NEW RPC REQUEST')
+            self.run_once()
 
-            try:
-                request = deserialize(request_data)
-                [request_id, method_name, payload] = request
-                logger.debug('Decoded request: [%s, %s, %s]'
-                             % (request_id, method_name, str(payload)[:50]))
-            except (SerializationError, ValueError) as exc:
-                logger.error('Received malformed RPC request!')
+    def run_once(self, timeout=None):
+        if timeout is not None:
+            timeout = int(1000 * timeout)
 
-            try:
-                method = self._rpc_methods.get(method_name)
-                logger.debug('Executing "%s" with payload "%s"...'
-                             % (method_name, str(payload)[:50]))
-                payload = method(self, payload)
-                is_exception = False
-            except Exception as exc:
-                logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
-                payload = '%s: %s' % (type(exc).__name__, exc)
-                is_exception = True
+        socket = self._socket
+        poller = self._poller
 
-            logger.debug('Serializing RPC response "%s"...' % str(payload)[:50])
-            response = [request_id, payload, is_exception]
-            response_data = serialize(response)
-            logger.debug('Sending RPC response "%s"...' % str(response_data)[:50])
-            socket.send(response_data)
+        logger.debug('Polling for requests...')
+        ready_sockets = dict(poller.poll(timeout=timeout))
+        logger.debug('Ready_sockets: {}'.format(ready_sockets))
+
+        for ready_socket in ready_sockets:
+            if ready_socket is socket:
+                self.__handle_request(ready_socket)
+            else:
+                self._fd_callbacks[fd]()
+
+    def __handle_request(self, socket):
+        request_data = socket.recv()
+
+        try:
+            request = deserialize(request_data)
+            [request_id, method_name, payload] = request
+        except (SerializationError, ValueError) as exc:
+            logger.error('Received malformed RPC request!')
+            # send empty message to keep REP state machine happy
+            socket.send(b'')
+            return
+
+        if request_id in self._cache:
+            # resend response silently
+            response_data = self._cache[request_id]
+            socket.send(self._cache[request_id])
+            return
+
+        try:
+            method = self._rpc_methods.get(method_name)
+            logger.debug('Executing "%s" with payload "%s"...'
+                         % (method_name, str(payload)[:50]))
+            payload = method(self, payload)
+            is_exception = False
+        except Exception as exc:
+            logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
+            payload = '%s: %s' % (type(exc).__name__, exc)
+            is_exception = True
+
+        logger.debug('Serializing RPC response "%s"...' % str(payload)[:50])
+        response = [request_id, payload, is_exception]
+        response_data = serialize(response)
+        logger.debug('Sending RPC response "%s"...' % str(response_data)[:50])
+        self._cache[request_id] = response_data
+        socket.send(response_data)
 
 
 class __RPCDecoratorClass:

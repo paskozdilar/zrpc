@@ -11,7 +11,17 @@ setuptools.setup(
     url='https://github.com/paskozdilar/zrpc.git',
     packages=setuptools.find_packages(),
     install_requires=[
-        "pyzmq",
-        "msgpack",
+        'pyzmq',
+        'msgpack',
     ],
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'zrpc = zrpc.__main__:main',
+        ],
+    },
 )

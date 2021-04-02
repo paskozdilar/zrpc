@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from zrpc.utils.serialization import serialize, deserialize
+from zrpc.serialization import serialize, deserialize
 
 
 
@@ -18,7 +18,7 @@ def test_builtin():
         1000, 3.14, float('inf'), float('-inf'),
         'asdf', b'qwerzxcv\x0f',
     )
-    
+
     for data in dataset:
         assert data == deserialize(serialize(data))
 
