@@ -72,8 +72,8 @@ class Client:
     def call(self, service, method, payload=None, timeout=None):
         """
         Call an RPC method of a service with a payload.
-        If timeout is None, blocks indefinitely.
-        If timeout is a number, blocks `timeout` seconds and raises
+        If `timeout` is None, blocks indefinitely.
+        If `timeout` is a number, blocks `timeout` seconds and raises
         RPCTimeoutError on timeout.
         """
         if timeout is None or timeout < 0:

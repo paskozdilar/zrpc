@@ -69,6 +69,7 @@ class Server:
         for method in self._rpc_methods.keys():
             logger.info('Registered RPC method: "%s"' % method)
 
+        self._name = name
         self._context = context
         self._socket = socket
         self._poller = poller
@@ -83,7 +84,7 @@ class Server:
         The `callback` callable will be called when data is READY TO BE READ
         from `fd` file descriptor.
 
-        ZRPC SERVICE WILL *NOT* READ ANY DATA FROM THE FILE DESCRIPTOR.
+        ZRPC SERVER WILL *NOT* READ ANY DATA FROM THE FILE DESCRIPTOR.
         That is the responsibility of the `callback` callable.
         """
         self._fd_callbacks[fd] = callback
@@ -95,7 +96,8 @@ class Server:
         self._poller.unregister(fd, zmq.POLLIN)
 
     def run(self):
-        logger.info('Entering main loop...')
+        """ Run service forever. """
+        logger.info('Running "{}" forever...'.format(self._name))
         while True:
             self.run_once()
 
