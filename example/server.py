@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 
-import logging
 from zrpc.server import Server, rpc_method
-
-
-logging.basicConfig(level=logging.INFO)
 
 
 class TestServer(Server):
