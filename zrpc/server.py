@@ -5,6 +5,7 @@ Subclass the `Server` class and use the `rpc_method` decorator to make the
 method available to ZRPC clients.
 """
 
+
 import collections
 import logging
 import os
@@ -116,7 +117,7 @@ class Server:
             if ready_socket is socket:
                 self.__handle_request(ready_socket)
             else:
-                self._fd_callbacks[fd]()
+                self._fd_callbacks[ready_socket]()
 
     def __handle_request(self, socket):
         request_data = socket.recv()
