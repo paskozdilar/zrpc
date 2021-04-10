@@ -67,9 +67,8 @@ class Server:
         logger.info('Waiting for bind to complete...')
         while not os.path.exists(socket_path):
             time.sleep(0.5)
-        os.chmod(socket_path, 0777)
+        os.chmod(socket_path, 0o777)
         logger.info('Success.')
-
 
         poller.register(socket, zmq.POLLIN)
 
