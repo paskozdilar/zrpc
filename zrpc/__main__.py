@@ -3,6 +3,7 @@
 import argparse
 import ast
 import logging
+import os
 
 from zrpc.server import Server, rpc_method
 from zrpc.client import Client
@@ -21,7 +22,11 @@ def main(argv=None):
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog='zrpc',
-                                     description='CLI interface for ZRPC')
+                                     description='CLI interface for ZRPC',
+                                     epilog='Set environment variable '
+                                            'ZRPC_SOCKET_DIR to change the '
+                                            'socket directory '
+                                            '(default: /tmp/zrpc_sockets)')
 
     parser.add_argument('-d', '--debug',
                         help='Turn on debug logs',
@@ -43,7 +48,11 @@ def parse_args(argv=None):
 
 
 def call(service, method, payload):
-    client = Client()
+    if 'ZRPC_SOCKET_DIR' in os.environ:
+        client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
+    else:
+        client = Client()
+
     response = client.call(service, method, payload)
     print(response)
 
