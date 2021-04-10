@@ -4,9 +4,15 @@ import argparse
 import ast
 import logging
 import os
+import signal
 
 from zrpc.server import Server, rpc_method
 from zrpc.client import Client
+
+
+def signal_handler(*args, **kwargs):
+    raise KeyboardInterrupt
+signal.signal(signal.SIGTERM, signal_handler)
 
 
 def main(argv=None):
