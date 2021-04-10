@@ -55,12 +55,21 @@ class Server:
         poller = zmq.Poller()
 
         socket_path = os.path.join(socket_dir, name)
+        if os.path.exists(socket_path):
+            os.remove(socket_path)
 
         try:
             os.makedirs(socket_dir, exist_ok=True)
             socket.bind('ipc://' + socket_path)
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Server init error') from exc
+
+        logger.info('Waiting for bind to complete...')
+        while not os.path.exists(socket_path):
+            time.sleep(0.5)
+        os.chmod(socket_path, 0777)
+        logger.info('Success.')
+
 
         poller.register(socket, zmq.POLLIN)
 
