@@ -155,15 +155,22 @@ class Server:
             return
 
         try:
-            method = self._rpc_methods.get(method_name)
+            method = self._rpc_methods[method_name]
+        except KeyError:
+            payload = 'Invalid RPC method name: %s' % method_name
+            is_exception = True
+            logger.error(payload)
+        else:
             logger.debug('Executing "%s" with payload "%s"...'
                          % (method_name, str(payload)[:50]))
-            payload = method(self, payload)
-            is_exception = False
-        except Exception as exc:
-            logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
-            payload = '%s: %s' % (type(exc).__name__, exc)
-            is_exception = True
+            try:
+                payload = method(self, payload)
+            except Exception as exc:
+                logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
+                payload = '%s: %s' % (type(exc).__name__, exc)
+                is_exception = True
+            else:
+                is_exception = False
 
         logger.debug('Serializing RPC response "%s"...' % str(payload)[:50])
         response = [request_id, payload, is_exception]
