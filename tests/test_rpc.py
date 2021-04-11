@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import multiprocessing
+import sys
 import tempfile
 import time
 from zrpc.server import Server, rpc_method
@@ -50,7 +51,7 @@ def test_reliability_client():
                 def mock_method(self, payload):
                     if not crash_event.wait(0):
                         crash_event.set()
-                        exit(1)
+                        sys.exit(1)
                     else:
                         return {'success': True}
 
