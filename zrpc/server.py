@@ -48,6 +48,8 @@ class Server:
             class_name = self.__class__.__name__
             name = re.sub('([A-Z]+)', r'_\1', class_name).strip('_').lower()
             logger.warning('Service name not set -- using "%s".' % name)
+        else:
+            logger.info('Starting RPC server "{}"...'.format(name))
         socket_dir = os.path.abspath(socket_dir)
 
         context = zmq.Context.instance()
@@ -70,7 +72,7 @@ class Server:
         os.chmod(socket_path, 0o777)
         logger.info('Success.')
 
-        poller.register(socket, zmq.POLLIN)
+        poller.register(socket)
 
         if self._rpc_methods is None:
             self._rpc_methods = {}
@@ -80,11 +82,18 @@ class Server:
 
         self._name = name
         self._context = context
+        self._socket_path = socket_path
         self._socket = socket
         self._poller = poller
 
         self._cache = _RPCCache(maxsize=10)
         self._fd_callbacks = {}
+
+    def __del__(self):
+        try:
+            os.unlink(self._socket_path)
+        except OSError:
+            pass
 
     def register(self, fd, callback):
         """
@@ -97,12 +106,12 @@ class Server:
         That is the responsibility of the `callback` callable.
         """
         self._fd_callbacks[fd] = callback
-        self._poller.register(fd, zmq.POLLIN)
+        self._poller.register(fd)
 
     def unregister(self, fd):
         """ Unregister file-like object `fd`. """
         self._fd_callbacks.pop(fd)
-        self._poller.unregister(fd, zmq.POLLIN)
+        self._poller.unregister(fd)
 
     def run(self):
         """ Run service forever. """
