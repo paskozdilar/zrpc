@@ -33,7 +33,7 @@ def main(argv=None):
         os.dup2(devnull, sys.stdout.fileno())
         sys.exit(1)
     except Exception as exc:
-        logging.error(exc, exc_info=args.DEBUG)
+        logging.error(exc, exc_info=args.debug)
 
 
 def parse_args(argv=None):
@@ -50,25 +50,25 @@ def parse_args(argv=None):
     call_parser = subparsers.add_parser(name='call',
                                         description='Call an RPC method.')
 
-    call_parser.add_argument('-d', '--debug',
+    parser.add_argument('-d', '--debug',
                         help='Turn on debug logs',
                         action='store_true')
     call_parser.add_argument('-c', '--count',
-                        help='Send N requests ("inf" for loop)',
-                        default=1,
-                        type=lambda x: float(x) if x == 'inf' else int(x))
+                             help='Send N requests ("inf" for loop)',
+                             default=1,
+                             type=lambda x: float(x) if x == 'inf' else int(x))
     call_parser.add_argument('service',
-                        help='Service name',
-                        metavar='SERVICE')
+                             help='Service name',
+                             metavar='SERVICE')
     call_parser.add_argument('method',
-                        help='Method to call',
-                        metavar='METHOD')
+                             help='Method to call',
+                             metavar='METHOD')
     call_parser.add_argument('payload',
-                        help='Payload to send [python object]',
-                        metavar='PAYLOAD',
-                        nargs='?',
-                        type=ast.literal_eval,
-                        default=None)
+                             help='Payload to send [python object]',
+                             metavar='PAYLOAD',
+                             nargs='?',
+                             type=ast.literal_eval,
+                             default=None)
 
     args = parser.parse_args(argv)
     if args.command is None:
