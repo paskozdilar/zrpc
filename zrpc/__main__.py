@@ -5,6 +5,7 @@ import ast
 import logging
 import os
 import signal
+import sys
 
 from zrpc.server import Server, rpc_method
 from zrpc.client import Client
@@ -22,7 +23,7 @@ def main(argv=None):
 
     try:
         logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
-        call(args)
+        globals()[args.command](args)
     except KeyboardInterrupt:
         pass
     except BrokenPipeError:
@@ -43,27 +44,38 @@ def parse_args(argv=None):
                                             'socket directory '
                                             '(default: /tmp/zrpc_sockets)')
 
-    parser.add_argument('-d', '--debug',
+    subparsers = parser.add_subparsers(title='command',
+                                       dest='command')
+
+    call_parser = subparsers.add_parser(name='call',
+                                        description='Call an RPC method.')
+
+    call_parser.add_argument('-d', '--debug',
                         help='Turn on debug logs',
                         action='store_true')
-    parser.add_argument('-c', '--count',
+    call_parser.add_argument('-c', '--count',
                         help='Send N requests ("inf" for loop)',
                         default=1,
                         type=lambda x: float(x) if x == 'inf' else int(x))
-    parser.add_argument('service',
+    call_parser.add_argument('service',
                         help='Service name',
                         metavar='SERVICE')
-    parser.add_argument('method',
+    call_parser.add_argument('method',
                         help='Method to call',
                         metavar='METHOD')
-    parser.add_argument('payload',
+    call_parser.add_argument('payload',
                         help='Payload to send [python object]',
                         metavar='PAYLOAD',
                         nargs='?',
                         type=ast.literal_eval,
                         default=None)
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        sys.exit(1)
+    else:
+        return args
 
 
 def call(args):
