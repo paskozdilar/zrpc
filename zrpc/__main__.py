@@ -135,9 +135,6 @@ def call(arguments):
     timeout = arguments.timeout
     count = arguments.count
 
-    print(args, kwargs)
-    exit()
-
     client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
 
     counter = 0
