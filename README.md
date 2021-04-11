@@ -14,9 +14,9 @@ See `example/` directory for runnable example.
 
     class TestServer(Server):
         @rpc_method
-        def func(self, payload):
-            print('RPC request [%s]: %s' % (self.counter, payload))
-            return 'func', payload
+        def func(self, arg, kwarg=None):
+            print('RPC request [%s]: arg %s, kwarg %s' (self.counter, arg, kwarg))
+            return 'func', arg, kwarg
 
     TestServer(name='test_server').run()
 
@@ -26,9 +26,10 @@ See `example/` directory for runnable example.
     from zrpc.client import Client
 
     client = Client()
-    response = client.call(service='test_server',
+    response = client.call(server='test_server',
                            method='func',
-                           payload={'haha': 'brt'})
+                           args=('haha',),
+                           kwargs={'kwarg': 'brt'})
     print('RPC response [%s]: %s' % (timestamp, response))
 
 
@@ -44,8 +45,8 @@ See `example/` directory for runnable example.
                 ZRPC server name, specified in client `call()` method.
                 If None, then server name is derived from class name,
                 converted from CamelCase to snake_case (i.e. if class name
-                is `MyClass`, then service name will be `my_class` and clients
-                shall call it with `call(service='my_class', ...)` ).
+                is `MyClass`, then server name will be `my_class` and clients
+                shall call it with `call(server='my_class', ...)` ).
 
                 default: None
 
@@ -102,21 +103,21 @@ See `example/` directory for runnable example.
 
                 default: '/tmp/zrpc_sockets'
 
-        call(service, method, payload=None, timeout=None)
-            Call an RPC method of a service with a payload.
+        call(server, method, args=None, kwargs=None, timeout=None)
+            Call an RPC method of a server with specified args and kwargs.
 
             If `timeout` is None, blocks indefinitely.
             If `timeout` is a number, blocks `timeout` seconds and raises
             RPCTimeoutError on timeout.
 
-            service:
-                Name of the service to be called.
+            server:
+                Name of the server to be called.
 
             method:
                 Name of the method to be called.
 
-            payload:
-                Python object to be sent as payload.
+            args:
+                Tuple of Python objects to be sent as positional arguments.
 
                 Since ZRPC uses `msgpack`, it supports all types that msgpack
                 does:
@@ -126,6 +127,10 @@ See `example/` directory for runnable example.
                     - float (including 'inf' and '-inf')
                     - str
                     - bytes
+                    - None
+
+            kwargs:
+                Dict of Python objects to be sent as keyword arguments.
 
             timeout:
                 Number of seconds to wait for an RPC method to complete.

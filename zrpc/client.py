@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 class Client:
-    def __init__(self, socket_dir='/tmp/zrpc_sockets/'):
-        socket_dir = os.path.abspath(socket_dir)
+    def __init__(self, socket_dir=None):
+        socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
         context = zmq.Context.instance()
         sockets = {}
@@ -69,9 +69,9 @@ class Client:
         self._poller.unregister(socket)
         logger.debug('Disconnected from "%s"' % socket_name)
 
-    def call(self, service, method, payload=None, timeout=None):
+    def call(self, server, method, args=(), kwargs={}, timeout=None):
         """
-        Call an RPC method of a service with a payload.
+        Call an RPC method of a server with args and kwargs.
         If `timeout` is None, blocks indefinitely.
         If `timeout` is a number, blocks `timeout` seconds and raises
         RPCTimeoutError on timeout.
@@ -80,12 +80,12 @@ class Client:
             timeout = float('inf')
 
         sockets = self._sockets
-        if service not in sockets:
-            self.__connect(service)
-        socket = sockets[service]
+        if server not in sockets:
+            self.__connect(server)
+        socket = sockets[server]
 
         request_id = str(uuid.uuid4())
-        request = serialize([request_id, method, payload])
+        request = serialize([request_id, method, args, kwargs])
 
         start_time = time.monotonic()
         events = {}
@@ -102,13 +102,13 @@ class Client:
             if socket in events:
                 break
 
-            logger.error('Service "%s" down - reconnecting...' % service)
-            self.__disconnect(service)
-            self.__connect(service)
-            socket = sockets[service]
+            logger.error('No response from "%s"- reconnecting...' % server)
+            self.__disconnect(server)
+            self.__connect(server)
+            socket = sockets[server]
 
         if socket not in events:
-            raise RPCTimeoutError('Service "%s" not responding' % service)
+            raise RPCTimeoutError('Service "%s" not responding' % server)
 
         response_data = socket.recv()
         response = deserialize(response_data)
@@ -121,3 +121,76 @@ class Client:
             raise RPCError(payload)
 
         return payload
+
+    def get_proxy(self):
+        return Proxy(self)
+
+
+# client = Client()
+# proxy = client.get_proxy():
+class Proxy:
+    def __init__(self, client=None):
+        self.client = client or Client()
+        self._cached_subproxies = {}
+
+    def __getattr__(self, server):
+        if server in self._cached_subproxies:
+            return self._cached_subproxies[server]
+        subproxy = _ServerProxy(server, self.client)
+        self._cached_subproxies[server] = subproxy
+        return subproxy
+
+# proxy.server_name:
+class _ServerProxy:
+    def __init__(self, server, client):
+        self.server = server
+        self.client = client
+        self._cached_subproxies = {}
+
+    def __getattr__(self, method):
+        if method in self._cached_subproxies:
+            return self._cached_subproxies[method]
+        subproxy = MethodProxy(self.server, method, self.client)
+        self._cached_subproxies[method] = subproxy
+        return subproxy
+
+# proxy.server_name.method_name:
+class _MethodProxy:
+    def __init__(self, server, method, client):
+        self.server = server
+        self.method = method
+        self.client = client
+        self._cached_subproxies = {}
+
+    def __call__(self, *args, **kwargs):
+        # proxy.server_name.method_name(*args, **kwargs):
+        return self.client.call(server=self.server,
+                                method=self.method,
+                                args=args,
+                                kwargs=kwargs)
+
+    def __getitem__(self, timeout):
+        if timeout in self._cached_subproxies:
+            return self._cached_subproxies[timeout]
+        subproxy = _MethodWithTimeoutProxy(self.server,
+                                           self.method,
+                                           self.client,
+                                           timeout)
+        self._cached_subproxies[timeout] = subproxy
+        return subproxy
+
+# proxy.service_name.method_name[timeout]:
+class _MethodWithTimeoutProxy:
+    def __init__(self, server, method, client, timeout):
+        self.server = server
+        self.method = method
+        self.client = client
+        self.timeout = timeout
+
+    def __call__(self, *args, **kwargs):
+        # proxy.service_name.method_name[timeout](*args, **kwargs):
+        return self.client.call(server=self.server,
+                                method=self.method,
+                                args=args,
+                                kwargs=kwargs,
+                                timeout=self.timeout)

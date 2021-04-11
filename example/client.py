@@ -9,9 +9,10 @@ def main():
 
     while True:
         timestamp = datetime.datetime.now().strftime('%F_%H-%M-%S-%f')
-        response = client.call(service='test_server',
+        response = client.call(server='test_server',
                                method='func',
-                               payload={'haha': 'brt'})
+                               args=('haha',),
+                               kwargs={'kwarg': 'brt'})
         print('RPC response [%s]: %s' % (timestamp, response))
 
 

@@ -19,7 +19,7 @@ def test_basic_rpc():
         def run_server():
             class MockServer(Server):
                 @rpc_method
-                def mock_method(self, payload):
+                def mock_method(self):
                     return {'success': True}
             MockServer(socket_dir=tempdir).run()
 
@@ -48,7 +48,7 @@ def test_reliability_client():
 
             class MockServer(Server):
                 @rpc_method
-                def mock_method(self, payload):
+                def mock_method(self):
                     if not crash_event.wait(0):
                         crash_event.set()
                         sys.exit(1)
@@ -86,7 +86,7 @@ def test_reliability_server():
 
             class MockServer(Server):
                 @rpc_method
-                def mock_method(self, payload):
+                def mock_method(self):
                     server_recv_event.set()
                     client_crash_event.wait()
                     return {'success': True}
@@ -111,4 +111,39 @@ def test_reliability_server():
         multiprocessing.Process(target=run_client, daemon=True).start()
 
         # Wait 5 seconds for retry
+        assert rpc_event.wait(5)
+
+
+def test_args_kwargs():
+    """
+    Test proper handling of arguments and keyword arguments.
+    """
+    rpc_event = multiprocessing.Event()
+
+    with tempfile.TemporaryDirectory() as tempdir:
+
+        def run_server():
+
+            class MockServer(Server):
+                @rpc_method
+                def mock_method(self, arg1, arg2, kwarg1=None, kwarg2=None):
+                    if (arg1, arg2, kwarg1, kwarg2) == ('1', '2', 3, 4):
+                        return {'success': True}
+                    else:
+                        return {'success': False}
+
+            MockServer(socket_dir=tempdir).run()
+
+        def run_client():
+            client = Client(socket_dir=tempdir)
+            response = client.call(server='mock_server',
+                                   method='mock_method',
+                                   args=('1', '2'),
+                                   kwargs={'kwarg1': 3, 'kwarg2': 4})
+            if response['success']:
+                rpc_event.set()
+
+        multiprocessing.Process(target=run_server, daemon=True).start()
+        multiprocessing.Process(target=run_client, daemon=True).start()
+
         assert rpc_event.wait(5)

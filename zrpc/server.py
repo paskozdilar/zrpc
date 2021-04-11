@@ -12,7 +12,7 @@ import os
 import re
 import zmq
 from zrpc.exceptions import ConnectError
-from zrpc.serialization import serialize, deserialize
+from zrpc.serialization import serialize, deserialize, SerializationError
 
 
 logger = logging.getLogger(__name__)
@@ -38,11 +38,10 @@ class _RPCCache(collections.OrderedDict):
             del self[oldest]
 
 
-
 class Server:
     _rpc_methods: dict = None
 
-    def __init__(self, name=None, socket_dir='/tmp/zrpc_sockets'):
+    def __init__(self, name=None, socket_dir=None):
         if name is None:
             # Convert CamelCase class name into snake_case
             class_name = self.__class__.__name__
@@ -50,7 +49,7 @@ class Server:
             logger.warning('Service name not set -- using "%s".' % name)
         else:
             logger.info('Starting RPC server "{}"...'.format(name))
-        socket_dir = os.path.abspath(socket_dir)
+        socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
@@ -141,7 +140,7 @@ class Server:
 
         try:
             request = deserialize(request_data)
-            [request_id, method_name, payload] = request
+            [request_id, method_name, args, kwargs] = request
         except (SerializationError, ValueError) as exc:
             logger.error('Received malformed RPC request!')
             # send empty message to keep REP state machine happy
@@ -161,10 +160,10 @@ class Server:
             is_exception = True
             logger.error(payload)
         else:
-            logger.debug('Executing "%s" with payload "%s"...'
-                         % (method_name, str(payload)[:50]))
+            logger.info('Executing "%s" with args "%s" and kwargs "%s"...'
+                         % (method_name, str(args)[:50], str(kwargs)[:50]))
             try:
-                payload = method(self, payload)
+                payload = method(self, *args, **kwargs)
             except Exception as exc:
                 logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
                 payload = '%s: %s' % (type(exc).__name__, exc)

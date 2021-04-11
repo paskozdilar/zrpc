@@ -7,10 +7,10 @@ class TestServer(Server):
     counter = 0
 
     @rpc_method
-    def func(self, payload):
+    def func(self, arg, kwarg=None):
         self.counter += 1
-        print('RPC request [%s]: %s' % (self.counter, payload))
-        return 'func', payload
+        print('RPC request [%s]: arg %s, kwarg %s' % (self.counter, arg, kwarg))
+        return 'func', arg, kwarg
 
 
 def main():
