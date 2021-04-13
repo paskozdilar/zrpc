@@ -104,11 +104,15 @@ class Server:
         ZRPC SERVER WILL *NOT* READ ANY DATA FROM THE FILE DESCRIPTOR.
         That is the responsibility of the `callback` callable.
         """
+        if hasattr(fd, 'fileno'):
+            fd = fd.fileno()
         self._fd_callbacks[fd] = callback
         self._poller.register(fd)
 
     def unregister(self, fd):
         """ Unregister file-like object `fd`. """
+        if hasattr(fd, 'fileno'):
+            fd = fd.fileno()
         self._fd_callbacks.pop(fd)
         self._poller.unregister(fd)
 
@@ -119,6 +123,7 @@ class Server:
             self.run_once()
 
     def run_once(self, timeout=None):
+        """ Run service once (process single event or wait for timeout) """
         if timeout is not None:
             timeout = int(1000 * timeout)
 
