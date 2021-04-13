@@ -95,7 +95,7 @@ def parse_args(argv=None):
         if '=' not in value_string:
             return _Kwarg(keyword, value_string)
 
-        raise argparse.ArgumentError(exc)
+        raise argparse.ArgumentError(exc, 'Invalid argument')
 
     call_parser.add_argument('args',
                              help='Positional arguments (python object)',
@@ -144,7 +144,8 @@ def call(arguments):
                                args=args, 
                                kwargs=kwargs,
                                timeout=timeout)
-        pprint.pprint(response)
+        if response is not None:
+            pprint.pprint(response)
         counter += 1
 
 

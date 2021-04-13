@@ -10,6 +10,7 @@ import collections
 import logging
 import os
 import re
+import time
 import zmq
 from zrpc.exceptions import ConnectError
 from zrpc.serialization import serialize, deserialize, SerializationError
@@ -165,7 +166,7 @@ class Server:
             is_exception = True
             logger.error(payload)
         else:
-            logger.info('Executing "%s" with args "%s" and kwargs "%s"...'
+            logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
                          % (method_name, str(args)[:50], str(kwargs)[:50]))
             try:
                 payload = method(self, *args, **kwargs)

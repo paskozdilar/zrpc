@@ -6,7 +6,6 @@ Instantiate this class and use the `.call` method to call an RPC method.
 
 import logging
 import os
-import stat
 import time
 import uuid
 import zmq
@@ -150,7 +149,7 @@ class _ServerProxy:
     def __getattr__(self, method):
         if method in self._cached_subproxies:
             return self._cached_subproxies[method]
-        subproxy = MethodProxy(self.server, method, self.client)
+        subproxy = _MethodProxy(self.server, method, self.client)
         self._cached_subproxies[method] = subproxy
         return subproxy
 
