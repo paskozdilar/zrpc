@@ -1,6 +1,6 @@
 import setuptools
 
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 
 setuptools.setup(
     name='zrpc',
