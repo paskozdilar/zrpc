@@ -92,7 +92,7 @@ class Server:
     def __del__(self):
         try:
             os.unlink(self._socket_path)
-        except OSError:
+        except (OSError, AttributeError):
             pass
 
     def register(self, fd, callback):
@@ -108,7 +108,7 @@ class Server:
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
         self._fd_callbacks[fd] = callback
-        self._poller.register(fd)
+        self._poller.register(fd, zmq.POLLIN)
 
     def unregister(self, fd):
         """ Unregister file-like object `fd`. """
