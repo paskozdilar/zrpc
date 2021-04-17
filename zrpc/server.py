@@ -16,9 +16,6 @@ from zrpc.exceptions import ConnectError
 from zrpc.serialization import serialize, deserialize, SerializationError
 
 
-logger = logging.getLogger(__name__)
-
-
 class _RPCCache(collections.OrderedDict):
 
     def __init__(self, maxsize=128, *args, **kwds):
@@ -47,9 +44,12 @@ class Server:
             # Convert CamelCase class name into snake_case
             class_name = self.__class__.__name__
             name = re.sub('([A-Z]+)', r'_\1', class_name).strip('_').lower()
-            logger.warning('Service name not set -- using "%s".' % name)
+            self._logger = logging.getLogger(__name__ + '.' + name)
+            self._logger.warning('Service name not set -- using "%s".' % name)
         else:
-            logger.info('Starting RPC server "{}"...'.format(name))
+            self._logger = logging.getLogger(__name__ + '.' + name)
+            self._logger.info('Starting RPC server "{}"...'.format(name))
+
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
         context = zmq.Context.instance()
@@ -66,19 +66,18 @@ class Server:
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Server init error') from exc
 
-        logger.info('Waiting for bind to complete...')
+        self._logger.info('Waiting for bind to complete...')
         while not os.path.exists(socket_path):
             time.sleep(0.5)
         os.chmod(socket_path, 0o777)
-        logger.info('Success.')
+        self._logger.info('Success.' + str(os.listdir(socket_dir)))
 
         poller.register(socket)
 
         if self._rpc_methods is None:
             self._rpc_methods = {}
 
-        for method in self._rpc_methods.keys():
-            logger.info('Registered RPC method: "%s"' % method)
+        self._logger.info('RPC methods: %s' % list(self._rpc_methods.keys()))
 
         self._name = name
         self._context = context
@@ -119,7 +118,7 @@ class Server:
 
     def run(self):
         """ Run service forever. """
-        logger.info('Running "{}" forever...'.format(self._name))
+        self._logger.info('Running "{}" forever...'.format(self._name))
         while True:
             self.run_once()
 
@@ -131,9 +130,9 @@ class Server:
         socket = self._socket
         poller = self._poller
 
-        logger.debug('Polling for requests...')
+        self._logger.debug('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        logger.debug('Ready_sockets: {}'.format(ready_sockets))
+        self._logger.debug('Ready_sockets: {}'.format(ready_sockets))
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
@@ -148,7 +147,7 @@ class Server:
             request = deserialize(request_data)
             [request_id, method_name, args, kwargs] = request
         except (SerializationError, ValueError) as exc:
-            logger.error('Received malformed RPC request!')
+            self._logger.error('Received malformed RPC request!')
             # send empty message to keep REP state machine happy
             socket.send(b'')
             return
@@ -164,23 +163,26 @@ class Server:
         except KeyError:
             payload = 'Invalid RPC method name: %s' % method_name
             is_exception = True
-            logger.error(payload)
+            self._logger.error(payload)
         else:
-            logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
+            self._logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
                          % (method_name, str(args)[:50], str(kwargs)[:50]))
             try:
                 payload = method(self, *args, **kwargs)
             except Exception as exc:
-                logger.error('--- RPC METHOD EXCEPTION ---', exc_info=True)
+                self._logger.error('--- RPC METHOD EXCEPTION ---',
+                                   exc_info=True)
                 payload = '%s: %s' % (type(exc).__name__, exc)
                 is_exception = True
             else:
                 is_exception = False
 
-        logger.debug('Serializing RPC response "%s"...' % str(payload)[:50])
+        self._logger.debug('Serializing RPC response "%s"...'
+                           % str(payload)[:50])
         response = [request_id, payload, is_exception]
         response_data = serialize(response)
-        logger.debug('Sending RPC response "%s"...' % str(response_data)[:50])
+        self._logger.debug('Sending RPC response "%s"...'
+                           % str(response_data)[:50])
         self._cache[request_id] = response_data
         socket.send(response_data)
 
