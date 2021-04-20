@@ -62,7 +62,6 @@ class Server:
             self._logger.warning('Service name not set -- using "%s".' % name)
         else:
             self._logger = logging.getLogger(__name__ + '.' + name)
-            self._logger.info('Starting RPC server "{}"...'.format(name))
 
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
@@ -94,6 +93,8 @@ class Server:
 
         name = self._name
         socket_dir = self._socket_dir
+
+        self._logger.info('Starting RPC server "{}"...'.format(name))
 
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
