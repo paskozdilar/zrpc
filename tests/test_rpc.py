@@ -147,3 +147,31 @@ def test_args_kwargs():
         multiprocessing.Process(target=run_client, daemon=True).start()
 
         assert rpc_event.wait(5)
+
+
+def test_multiprocessing():
+    """
+    Test whether ZRPC works in multiprocessing environment.
+    """
+    rpc_event = multiprocessing.Event()
+
+    with tempfile.TemporaryDirectory() as tempdir:
+
+        class MockServer(Server):
+            @rpc_method
+            def mock_method(self):
+                return {'success': True}
+
+        def run_server():
+            MockServer(socket_dir=tempdir).run()
+
+        def run_client():
+            mock_client = Client(socket_dir=tempdir)
+            response = mock_client.call('mock_server', 'mock_method')
+            if response['success']:
+                rpc_event.set()
+
+        multiprocessing.Process(target=run_server, daemon=True).start()
+        multiprocessing.Process(target=run_client, daemon=True).start()
+
+        assert rpc_event.wait(1)

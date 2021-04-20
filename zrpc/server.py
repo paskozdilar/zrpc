@@ -3,6 +3,20 @@ Synchronous ZRPC server.
 
 Subclass the `Server` class and use the `rpc_method` decorator to make the
 method available to ZRPC clients.
+
+User API:
+
+  Server:
+    |- start()
+    |- stop()
+    |
+    |- register(fd, callback)
+    |- unregister(fd)
+    |
+    |- run()
+    |- run_once(timeout=None)
+
+  rpc_method:  <decorator for Server methods>
 """
 
 
@@ -52,6 +66,35 @@ class Server:
 
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
+        self._name = name
+        self._context = None
+        self._socket_dir = socket_dir
+        self._socket_path = None
+        self._socket = None
+        self._poller = None
+
+        self._cache = None
+        self._fd_callbacks = None
+
+        self._started = False
+
+    def __del__(self):
+        self.stop()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.stop()
+
+    def start(self):
+        if self._started:
+            return
+
+        name = self._name
+        socket_dir = self._socket_dir
+
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
         poller = zmq.Poller()
@@ -87,12 +130,18 @@ class Server:
 
         self._cache = _RPCCache(maxsize=10)
         self._fd_callbacks = {}
+        self._started = True
 
-    def __del__(self):
+    def stop(self):
         try:
+            if not self._started:
+                return
+            self._context.term()
             os.unlink(self._socket_path)
         except (OSError, AttributeError):
             pass
+        finally:
+            self._started = False
 
     def register(self, fd, callback):
         """
@@ -119,20 +168,30 @@ class Server:
     def run(self):
         """ Run service forever. """
         self._logger.info('Running "{}" forever...'.format(self._name))
-        while True:
-            self.run_once()
+        if self._started:
+            self._logger.info('STARTEd')
+            while True:
+                self.run_once()
+        else:
+            self._logger.info('NOT STARTEd')
+            with self:
+                while True:
+                    self.run_once()
 
     def run_once(self, timeout=None):
         """ Run service once (process single event or wait for timeout) """
+        if not self._started:
+            raise RuntimeError('Server not started')
+
         if timeout is not None:
             timeout = int(1000 * timeout)
 
         socket = self._socket
         poller = self._poller
 
-        self._logger.debug('Polling for requests...')
+        self._logger.info('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        self._logger.debug('Ready_sockets: {}'.format(ready_sockets))
+        self._logger.info('Ready_sockets: {}'.format(ready_sockets))
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
