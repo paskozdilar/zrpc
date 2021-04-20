@@ -74,7 +74,7 @@ class Server:
         self._poller = None
 
         self._cache = None
-        self._fd_callbacks = None
+        self._fd_callbacks = {}
 
         self._started = False
 
@@ -116,20 +116,21 @@ class Server:
         self._logger.info('Success.' + str(os.listdir(socket_dir)))
 
         poller.register(socket)
+        fd_callbacks = self._fd_callbacks
+        for fd in fd_callbacks:
+            poller.register(fd, zmq.POLLIN)
 
         if self._rpc_methods is None:
             self._rpc_methods = {}
 
         self._logger.info('RPC methods: %s' % list(self._rpc_methods.keys()))
 
-        self._name = name
         self._context = context
         self._socket_path = socket_path
         self._socket = socket
         self._poller = poller
 
         self._cache = _RPCCache(maxsize=10)
-        self._fd_callbacks = {}
         self._started = True
 
     def stop(self):
@@ -140,6 +141,12 @@ class Server:
             os.unlink(self._socket_path)
         except (OSError, AttributeError):
             pass
+        else:
+            self._context = None
+            self._socket_path = None
+            self._socket = None
+            self._poller = None
+            self._cache = _RPCCache(maxsize=10)
         finally:
             self._started = False
 
@@ -156,24 +163,24 @@ class Server:
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
         self._fd_callbacks[fd] = callback
-        self._poller.register(fd, zmq.POLLIN)
+        if self._started:
+            self._poller.register(fd, zmq.POLLIN)
 
     def unregister(self, fd):
         """ Unregister file-like object `fd`. """
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
         self._fd_callbacks.pop(fd)
-        self._poller.unregister(fd)
+        if self._started:
+            self._poller.unregister(fd)
 
     def run(self):
         """ Run service forever. """
         self._logger.info('Running "{}" forever...'.format(self._name))
         if self._started:
-            self._logger.info('STARTEd')
             while True:
                 self.run_once()
         else:
-            self._logger.info('NOT STARTEd')
             with self:
                 while True:
                     self.run_once()
