@@ -4,8 +4,11 @@ import multiprocessing
 import sys
 import tempfile
 import time
+
+import pytest
+
 from zrpc.server import Server, rpc_method
-from zrpc.client import Client
+from zrpc.client import Client, RPCTimeoutError
 
 
 def test_basic_rpc():
@@ -175,3 +178,23 @@ def test_multiprocessing():
         multiprocessing.Process(target=run_client, daemon=True).start()
 
         assert rpc_event.wait(1)
+
+
+def test_client_timeout():
+    """
+    Test whether client raises RPCTimeoutError on `call()` timeout.
+    """
+
+    client_event = multiprocessing.Event()
+
+    def run_client():
+        with tempfile.TemporaryDirectory() as tempdir:
+            client = Client(socket_dir=tempdir)
+            try:
+                client.call('non_existant', 'non_existant', timeout=0.1)
+            except RPCTimeoutError:
+                client_event.set()
+
+    multiprocessing.Process(target=run_client, daemon=True).start()
+
+    assert client_event.wait(1)

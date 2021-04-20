@@ -39,6 +39,13 @@ class Client:
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Cannot connect client') from exc
 
+    def __del__(self):
+        try:
+            for socket in self._sockets:
+                socket.close(linger=0)
+        except AttributeError:
+            pass
+
     def __connect(self, socket_name):
         context = self._context
         sockets = self._sockets
@@ -89,12 +96,13 @@ class Client:
         start_time = time.monotonic()
         events = {}
 
-        current_time = time.monotonic()
+        current_time = start_time
+        elapsed_time = current_time - start_time
 
         iter_timeout = 1
-        while (current_time - start_time) < timeout:
+        while elapsed_time <= timeout:
             socket.send(request)
-            timeout_ms = 1000 * max(0, min(iter_timeout, timeout - (current_time - start_time)))
+            timeout_ms = 1000 * max(0, min(iter_timeout, timeout - elapsed_time))
             logging.debug('Polling sockets with {}ms timeout'.format(timeout_ms))
             events = dict(self._poller.poll(timeout=timeout_ms))
 
@@ -105,6 +113,9 @@ class Client:
             self.__disconnect(server)
             self.__connect(server)
             socket = sockets[server]
+
+            current_time = time.monotonic()
+            elapsed_time = current_time - start_time
 
         if socket not in events:
             raise RPCTimeoutError('Service "%s" not responding' % server)

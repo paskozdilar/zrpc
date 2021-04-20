@@ -136,7 +136,7 @@ class Server:
         try:
             if not self._started:
                 return
-            self._context.term()
+            self._socket.close(linger=0)
             os.unlink(self._socket_path)
         except (OSError, AttributeError):
             pass
