@@ -38,12 +38,12 @@ class _RPCCache(collections.OrderedDict):
 
     def __getitem__(self, key):
         value = super().__getitem__(key)
-        self.move_to_end(key)
+        Server.move_to_end(self, key)
         return value
 
     def __setitem__(self, key, value):
         if key in self:
-            self.move_to_end(key)
+            Server.move_to_end(self, key)
         super().__setitem__(key, value)
         if len(self) > self.maxsize:
             oldest = next(iter(self))
@@ -58,43 +58,43 @@ class Server:
             # Convert CamelCase class name into snake_case
             class_name = self.__class__.__name__
             name = re.sub('([A-Z]+)', r'_\1', class_name).strip('_').lower()
-            self._logger = logging.getLogger(__name__ + '.' + name)
-            self._logger.warning('Service name not set -- using "%s".' % name)
+            self.__logger = logging.getLogger(__name__ + '.' + name)
+            self.__logger.warning('Service name not set -- using "%s".' % name)
         else:
-            self._logger = logging.getLogger(__name__ + '.' + name)
+            self.__logger = logging.getLogger(__name__ + '.' + name)
 
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
-        self._name = name
-        self._context = None
-        self._socket_dir = socket_dir
-        self._socket_path = None
-        self._socket = None
-        self._poller = None
+        self.__name = name
+        self.__context = None
+        self.__socket_dir = socket_dir
+        self.__socket_path = None
+        self.__socket = None
+        self.__poller = None
 
-        self._cache = None
-        self._fd_callbacks = {}
+        self.__cache = None
+        self.__fd_callbacks = {}
 
-        self._started = False
+        self.__started = False
 
     def __del__(self):
-        self.stop()
+        Server.stop(self)
 
     def __enter__(self):
-        self.start()
+        Server.start(self)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.stop()
+        Server.stop(self)
 
     def start(self):
-        if self._started:
+        if self.__started:
             return
 
-        name = self._name
-        socket_dir = self._socket_dir
+        name = self.__name
+        socket_dir = self.__socket_dir
 
-        self._logger.info('Starting RPC server "{}"...'.format(name))
+        self.__logger.info('Starting RPC server "{}"...'.format(name))
 
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
@@ -110,46 +110,46 @@ class Server:
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Server init error') from exc
 
-        self._logger.info('Waiting for bind to complete...')
+        self.__logger.info('Waiting for bind to complete...')
         while not os.path.exists(socket_path):
             time.sleep(0.5)
         os.chmod(socket_path, 0o777)
-        self._logger.info('Success.' + str(os.listdir(socket_dir)))
+        self.__logger.info('Success.' + str(os.listdir(socket_dir)))
 
         poller.register(socket)
-        fd_callbacks = self._fd_callbacks
+        fd_callbacks = self.__fd_callbacks
         for fd in fd_callbacks:
             poller.register(fd, zmq.POLLIN)
 
         if self._rpc_methods is None:
             self._rpc_methods = {}
 
-        self._logger.info('RPC methods: %s' % list(self._rpc_methods.keys()))
+        self.__logger.info('RPC methods: %s' % list(self._rpc_methods.keys()))
 
-        self._context = context
-        self._socket_path = socket_path
-        self._socket = socket
-        self._poller = poller
+        self.__context = context
+        self.__socket_path = socket_path
+        self.__socket = socket
+        self.__poller = poller
 
-        self._cache = _RPCCache(maxsize=10)
-        self._started = True
+        self.__cache = _RPCCache(maxsize=10)
+        self.__started = True
 
     def stop(self):
         try:
-            if not self._started:
+            if not self.__started:
                 return
-            self._socket.close(linger=0)
-            os.unlink(self._socket_path)
+            self.__socket.close(linger=0)
+            os.unlink(self.__socket_path)
         except (OSError, AttributeError):
             pass
         else:
-            self._context = None
-            self._socket_path = None
-            self._socket = None
-            self._poller = None
-            self._cache = _RPCCache(maxsize=10)
+            self.__context = None
+            self.__socket_path = None
+            self.__socket = None
+            self.__poller = None
+            self.__cache = _RPCCache(maxsize=10)
         finally:
-            self._started = False
+            self.__started = False
 
     def register(self, fd, callback):
         """
@@ -163,49 +163,49 @@ class Server:
         """
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
-        self._fd_callbacks[fd] = callback
-        if self._started:
-            self._poller.register(fd, zmq.POLLIN)
+        self.__fd_callbacks[fd] = callback
+        if self.__started:
+            self.__poller.register(fd, zmq.POLLIN)
 
     def unregister(self, fd):
         """ Unregister file-like object `fd`. """
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
-        self._fd_callbacks.pop(fd)
-        if self._started:
-            self._poller.unregister(fd)
+        self.__fd_callbacks.pop(fd)
+        if self.__started:
+            self.__poller.unregister(fd)
 
     def run(self):
         """ Run service forever. """
-        self._logger.info('Running "{}" forever...'.format(self._name))
-        if self._started:
+        self.__logger.info('Running "{}" forever...'.format(self.__name))
+        if self.__started:
             while True:
-                self.run_once()
+                Server.run_once(self)
         else:
             with self:
                 while True:
-                    self.run_once()
+                    Server.run_once(self)
 
     def run_once(self, timeout=None):
         """ Run service once (process single event or wait for timeout) """
-        if not self._started:
+        if not self.__started:
             raise RuntimeError('Server not started')
 
         if timeout is not None:
             timeout = int(1000 * timeout)
 
-        socket = self._socket
-        poller = self._poller
+        socket = self.__socket
+        poller = self.__poller
 
-        self._logger.info('Polling for requests...')
+        self.__logger.info('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        self._logger.info('Ready_sockets: {}'.format(ready_sockets))
+        self.__logger.info('Ready_sockets: {}'.format(ready_sockets))
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
-                self.__handle_request(ready_socket)
+                Server.__handle_request(self, ready_socket)
             else:
-                self._fd_callbacks[ready_socket]()
+                self.__fd_callbacks[ready_socket]()
 
     def __handle_request(self, socket):
         request_data = socket.recv()
@@ -214,15 +214,15 @@ class Server:
             request = deserialize(request_data)
             [request_id, method_name, args, kwargs] = request
         except (SerializationError, ValueError) as exc:
-            self._logger.error('Received malformed RPC request!')
+            self.__logger.error('Received malformed RPC request!')
             # send empty message to keep REP state machine happy
             socket.send(b'')
             return
 
-        if request_id in self._cache:
+        if request_id in self.__cache:
             # resend response silently
-            response_data = self._cache[request_id]
-            socket.send(self._cache[request_id])
+            response_data = self.__cache[request_id]
+            socket.send(self.__cache[request_id])
             return
 
         try:
@@ -230,27 +230,27 @@ class Server:
         except KeyError:
             payload = 'Invalid RPC method name: %s' % method_name
             is_exception = True
-            self._logger.error(payload)
+            self.__logger.error(payload)
         else:
-            self._logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
+            self.__logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
                          % (method_name, str(args)[:50], str(kwargs)[:50]))
             try:
                 payload = method(self, *args, **kwargs)
             except Exception as exc:
-                self._logger.error('--- RPC METHOD EXCEPTION ---',
+                self.__logger.error('--- RPC METHOD EXCEPTION ---',
                                    exc_info=True)
                 payload = '%s: %s' % (type(exc).__name__, exc)
                 is_exception = True
             else:
                 is_exception = False
 
-        self._logger.debug('Serializing RPC response "%s"...'
+        self.__logger.debug('Serializing RPC response "%s"...'
                            % str(payload)[:50])
         response = [request_id, payload, is_exception]
         response_data = serialize(response)
-        self._logger.debug('Sending RPC response "%s"...'
+        self.__logger.debug('Sending RPC response "%s"...'
                            % str(response_data)[:50])
-        self._cache[request_id] = response_data
+        self.__cache[request_id] = response_data
         socket.send(response_data)
 
 
