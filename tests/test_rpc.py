@@ -192,3 +192,31 @@ def test_client_timeout(socket_dir):
     multiprocessing.Process(target=run_client, daemon=True).start()
 
     assert client_event.wait(1)
+
+
+def test_server_restart(socket_dir):
+    """
+    Test whether server works properly on restart.
+    """
+    number_of_restarts = 5
+
+    def run_server_n_times(n):
+
+        class MockServer(Server):
+            @rpc_method
+            def mock_method(self):
+                return {'success': True}
+
+        server = MockServer(socket_dir=socket_dir)
+        for i in range(n):
+            with server:
+                server.run_once()
+
+    multiprocessing.Process(target=run_server_n_times,
+                            args=[number_of_restarts],
+                            daemon=True).start()
+
+    for i in range(number_of_restarts):
+        client = Client(socket_dir=socket_dir)
+        response = client.call('mock_server', 'mock_method', timeout=3)
+        assert response['success']
