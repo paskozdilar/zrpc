@@ -54,7 +54,7 @@ def test_reliability_client(socket_dir):
         class MockServer(Server):
             @rpc_method
             def mock_method(self):
-                if not crash_event.wait(0):
+                if not crash_event.is_set():
                     crash_event.set()
                     sys.exit(1)
                 else:
@@ -63,7 +63,7 @@ def test_reliability_client(socket_dir):
         MockServer(socket_dir=socket_dir).run()
 
     def run_client():
-        client = Client(socket_dir=socket_dir)
+        client = Client(socket_dir=socket_dir, retry_timeout=0.1)
         response = client.call('mock_server', 'mock_method')
         if response['success']:
             rpc_event.set()
@@ -220,3 +220,28 @@ def test_server_restart(socket_dir):
         client = Client(socket_dir=socket_dir)
         response = client.call('mock_server', 'mock_method', timeout=3)
         assert response['success']
+
+
+def test_server_cache(socket_dir):
+
+    counter = multiprocessing.Value('i')
+    counter.value = 0
+
+    class MockServer(Server):
+        @rpc_method
+        def mock_method(self):
+            time.sleep(0.1)
+            counter.value += 1
+            return {'success': True}
+
+    def run_server():
+        MockServer(socket_dir=socket_dir).run()
+
+    multiprocessing.Process(target=run_server, daemon=True).start()
+
+    # Retry 10 times
+    client = Client(socket_dir=socket_dir, retry_timeout=0.01)
+    client.call(server='mock_server', method='mock_method', timeout=1)
+
+    # Assert method executed only once
+    assert counter.value == 1
