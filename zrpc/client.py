@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class Client:
-    def __init__(self, socket_dir=None):
+    def __init__(self, socket_dir=None, retry_timeout=None):
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
         context = zmq.Context.instance()
@@ -30,7 +30,9 @@ class Client:
         self._context = context
         self._poller = zmq.Poller()
         self._sockets = sockets
+
         self._socket_dir = socket_dir
+        self._retry_timeout = retry_timeout or 1
 
         try:
             os.makedirs(socket_dir, exist_ok=True)
@@ -41,8 +43,8 @@ class Client:
 
     def __del__(self):
         try:
-            for socket in self._sockets:
-                socket.close(linger=0)
+            for socket_name in list(self._sockets.keys()):
+                self.__disconnect(socket_name)
         except AttributeError:
             pass
 
@@ -61,7 +63,7 @@ class Client:
         sockets[socket_name] = socket
 
         self._poller.register(socket, zmq.POLLIN)
-        logger.debug('Connected to "%s"' % socket_name)
+        logger.debug('Connected to "%s"', socket_name)
 
     def __disconnect(self, socket_name):
         sockets = self._sockets
@@ -73,7 +75,7 @@ class Client:
         socket.close(linger=0)
 
         self._poller.unregister(socket)
-        logger.debug('Disconnected from "%s"' % socket_name)
+        logger.debug('Disconnected from "%s"', socket_name)
 
     def call(self, server, method, args=(), kwargs={}, timeout=None):
         """
@@ -99,17 +101,17 @@ class Client:
         current_time = start_time
         elapsed_time = current_time - start_time
 
-        iter_timeout = 1
+        retry_timeout = self._retry_timeout
         while elapsed_time <= timeout:
             socket.send(request)
-            timeout_ms = 1000 * max(0, min(iter_timeout, timeout - elapsed_time))
-            logging.debug('Polling sockets with {}ms timeout'.format(timeout_ms))
+            timeout_ms = 1000 * max(0, min(retry_timeout, timeout - elapsed_time))
+            logging.debug('Polling sockets with %s ms timeout', timeout_ms)
             events = dict(self._poller.poll(timeout=timeout_ms))
 
             if socket in events:
                 break
 
-            logger.error('No response from "%s"- reconnecting...' % server)
+            logger.error('No response from "%s" - reconnecting...' % server)
             self.__disconnect(server)
             self.__connect(server)
             socket = sockets[server]

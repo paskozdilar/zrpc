@@ -38,12 +38,12 @@ class _RPCCache(collections.OrderedDict):
 
     def __getitem__(self, key):
         value = super().__getitem__(key)
-        Server.move_to_end(self, key)
+        self.move_to_end(key)
         return value
 
     def __setitem__(self, key, value):
         if key in self:
-            Server.move_to_end(self, key)
+            self.move_to_end(key)
         super().__setitem__(key, value)
         if len(self) > self.maxsize:
             oldest = next(iter(self))
@@ -78,7 +78,8 @@ class Server:
         self.__started = False
 
     def __del__(self):
-        Server.stop(self)
+        if self.__started:
+            Server.stop(self)
 
     def __enter__(self):
         Server.start(self)
@@ -89,7 +90,7 @@ class Server:
 
     def start(self):
         if self.__started:
-            return
+            raise RuntimeError('Server already started')
 
         name = self.__name
         socket_dir = self.__socket_dir
@@ -137,7 +138,7 @@ class Server:
     def stop(self):
         try:
             if not self.__started:
-                return
+                raise RuntimeError('Server already started')
             self.__socket.close(linger=0)
             os.unlink(self.__socket_path)
         except (OSError, AttributeError):
@@ -197,9 +198,9 @@ class Server:
         socket = self.__socket
         poller = self.__poller
 
-        self.__logger.info('Polling for requests...')
+        self.__logger.debug('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        self.__logger.info('Ready_sockets: {}'.format(ready_sockets))
+        self.__logger.debug('Ready_sockets: {}'.format(ready_sockets))
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
@@ -221,6 +222,7 @@ class Server:
 
         if request_id in self.__cache:
             # resend response silently
+            self.__logger.debug('Returning request from cache: %s', request_id)
             response_data = self.__cache[request_id]
             socket.send(self.__cache[request_id])
             return
