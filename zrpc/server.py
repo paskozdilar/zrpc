@@ -111,11 +111,11 @@ class Server:
         except (OSError, zmq.ZMQError) as exc:
             raise ConnectError('Server init error') from exc
 
-        self.__logger.info('Waiting for bind to complete...')
+        self.__logger.debug('Waiting for bind to complete...')
         while not os.path.exists(socket_path):
             time.sleep(0.5)
         os.chmod(socket_path, 0o777)
-        self.__logger.info('Success. %s', os.listdir(socket_dir))
+        self.__logger.debug('Success. %s', os.listdir(socket_dir))
 
         poller.register(socket)
         fd_callbacks = self.__fd_callbacks
@@ -138,7 +138,7 @@ class Server:
     def stop(self):
         try:
             if not self.__started:
-                raise RuntimeError('Server already started')
+                raise RuntimeError('Server not started')
             self.__socket.close(linger=0)
             os.unlink(self.__socket_path)
         except (OSError, AttributeError):
