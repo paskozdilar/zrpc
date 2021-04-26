@@ -95,7 +95,7 @@ class Server:
         name = self.__name
         socket_dir = self.__socket_dir
 
-        self.__logger.info('Starting RPC server "{}"...'.format(name))
+        self.__logger.info('Starting RPC server "%s"...', name)
 
         context = zmq.Context.instance()
         socket = context.socket(zmq.REP)
@@ -115,7 +115,7 @@ class Server:
         while not os.path.exists(socket_path):
             time.sleep(0.5)
         os.chmod(socket_path, 0o777)
-        self.__logger.info('Success.' + str(os.listdir(socket_dir)))
+        self.__logger.info('Success. %s', os.listdir(socket_dir))
 
         poller.register(socket)
         fd_callbacks = self.__fd_callbacks
@@ -125,7 +125,7 @@ class Server:
         if self._rpc_methods is None:
             self._rpc_methods = {}
 
-        self.__logger.info('RPC methods: %s' % list(self._rpc_methods.keys()))
+        self.__logger.info('RPC methods: %s', list(self._rpc_methods.keys()))
 
         self.__context = context
         self.__socket_path = socket_path
@@ -178,7 +178,7 @@ class Server:
 
     def run(self):
         """ Run service forever. """
-        self.__logger.info('Running "{}" forever...'.format(self.__name))
+        self.__logger.info('Running "%s" forever...', self.__name)
         if self.__started:
             while True:
                 Server.run_once(self)
@@ -200,7 +200,7 @@ class Server:
 
         self.__logger.debug('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        self.__logger.debug('Ready_sockets: {}'.format(ready_sockets))
+        self.__logger.debug('Ready_sockets: %s', ready_sockets)
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
@@ -234,8 +234,8 @@ class Server:
             is_exception = True
             self.__logger.error(payload)
         else:
-            self.__logger.debug('Executing "%s" with args "%s" and kwargs "%s"...'
-                         % (method_name, str(args)[:50], str(kwargs)[:50]))
+            self.__logger.debug('Executing "%s" with args "%s" and kwargs "%s"...',
+                                method_name, str(args)[:50], str(kwargs)[:50])
             try:
                 payload = method(self, *args, **kwargs)
             except Exception as exc:
@@ -246,12 +246,12 @@ class Server:
             else:
                 is_exception = False
 
-        self.__logger.debug('Serializing RPC response "%s"...'
-                           % str(payload)[:50])
+        self.__logger.debug('Serializing RPC response "%s"...',
+                            str(payload)[:50])
         response = [request_id, payload, is_exception]
         response_data = serialize(response)
-        self.__logger.debug('Sending RPC response "%s"...'
-                           % str(response_data)[:50])
+        self.__logger.debug('Sending RPC response "%s"...',
+                            str(response_data)[:50])
         self.__cache[request_id] = response_data
         socket.send(response_data)
 
