@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from zrpc.serialization import serialize, deserialize
 
 
