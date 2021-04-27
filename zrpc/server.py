@@ -86,7 +86,11 @@ class Server:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        Server.stop(self)
+        try:
+            Server.stop(self)
+        except RuntimeError:
+            # Do not raise if server has stopped itself
+            pass
 
     def start(self):
         if self.__started:
@@ -162,7 +166,7 @@ class Server:
         ZRPC SERVER WILL *NOT* READ ANY DATA FROM THE FILE DESCRIPTOR.
         That is the responsibility of the `callback` callable.
         """
-        if hasattr(fd, 'fileno'):
+        if not isinstance(fd, zmq.Socket) and hasattr(fd, 'fileno'):
             fd = fd.fileno()
         self.__fd_callbacks[fd] = callback
         if self.__started:
@@ -180,11 +184,11 @@ class Server:
         """ Run service forever. """
         self.__logger.info('Running "%s" forever...', self.__name)
         if self.__started:
-            while True:
+            while self.__started:
                 Server.run_once(self)
         else:
             with self:
-                while True:
+                while self.__started:
                     Server.run_once(self)
 
     def run_once(self, timeout=None):
