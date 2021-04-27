@@ -178,13 +178,14 @@ class Server:
 
     def run(self):
         """ Run service forever. """
-        if not self.__started:
-            raise RuntimeError('Server not started')
-
         self.__logger.info('Running "%s" forever...', self.__name)
-
-        while True:
-            Server.run_once(self)
+        if self.__started:
+            while True:
+                Server.run_once(self)
+        else:
+            with self:
+                while True:
+                    Server.run_once(self)
 
     def run_once(self, timeout=None):
         """ Run service once (process single event or wait for timeout) """
