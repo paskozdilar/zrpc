@@ -172,7 +172,7 @@ class Server:
         """ Unregister file-like object `fd`. """
         if hasattr(fd, 'fileno'):
             fd = fd.fileno()
-        self.__fd_callbacks.pop(fd)
+        self.__fd_callbacks.pop(fd, default=None)
         if self.__started:
             self.__poller.unregister(fd)
 
