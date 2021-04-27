@@ -210,7 +210,11 @@ class Server:
             if ready_socket is socket:
                 Server.__handle_request(self, ready_socket)
             else:
-                self.__fd_callbacks[ready_socket]()
+                try:
+                    self.__fd_callbacks[ready_socket]()
+                except KeyError:
+                    # Ignore socket that removes itself
+                    pass
 
     def __handle_request(self, socket):
         request_data = socket.recv()
