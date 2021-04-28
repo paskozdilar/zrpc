@@ -3,7 +3,7 @@ Module for converting unix signals (see: `man signal`) into zrpc events.
 
 To use with a zrpc Server, start() the signal handler and register the socket
 obtained by SignalHandler.get_socket().
-The received value will be the signal name in bytes.
+The received value will be the signal name in bytes (e.g. b"SIGTERM").
 
 User API:
 
