@@ -134,6 +134,9 @@ class Client:
 
         return payload
 
+    def list(self):
+        return os.listdir(self._socket_dir)
+
     def get_proxy(self):
         return Proxy(self)
 

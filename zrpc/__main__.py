@@ -111,18 +111,24 @@ def parse_args(argv=None):
                              nargs='*',
                              default=None)
 
+    call_parser = subparsers.add_parser(name='list',
+                                        description='List available servers.')
+
     arguments = parser.parse_args(argv)
+
     if arguments.command is None:
         parser.print_help()
         sys.exit(1)
-    # Everything is parsed through args.
-    # Blame argparse writers.
-    arguments.kwargs = dict((kwarg.key, kwarg.value)
-                            for kwarg in arguments.args
-                            if isinstance(kwarg, _Kwarg))
-    arguments.args = tuple(arg
-                           for arg in arguments.args
-                           if not isinstance(arg, _Kwarg))
+
+    elif arguments.command == 'call':
+        # Everything is parsed through args.
+        # Blame argparse writers.
+        arguments.kwargs = dict((kwarg.key, kwarg.value)
+                                for kwarg in arguments.args
+                                if isinstance(kwarg, _Kwarg))
+        arguments.args = tuple(arg
+                               for arg in arguments.args
+                               if not isinstance(arg, _Kwarg))
 
     return arguments
 
@@ -147,6 +153,12 @@ def call(arguments):
         if response is not None:
             pprint.pprint(response)
         counter += 1
+
+
+def list(arguments):
+    # TODO: add per-service method list
+    client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
+    pprint.pprint(client.list())
 
 
 if __name__ == '__main__':
