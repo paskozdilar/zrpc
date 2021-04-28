@@ -8,8 +8,8 @@ import pprint
 import signal
 import sys
 
-from zrpc.server import Server, rpc_method
-from zrpc.client import Client
+from .server import Server, rpc_method
+from .client import Client
 
 
 def signal_handler(*args, **kwargs):
