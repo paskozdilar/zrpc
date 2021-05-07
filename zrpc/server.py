@@ -118,7 +118,12 @@ class Server:
         self.__logger.debug('Waiting for bind to complete...')
         while not os.path.exists(socket_path):
             time.sleep(0.5)
-        os.chmod(socket_path, 0o777)
+
+        try:
+            os.chmod(socket_path, 0o777)
+        except OSError:
+            pass
+
         self.__logger.debug('Success. %s', os.listdir(socket_dir))
 
         poller.register(socket)
