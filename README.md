@@ -2,6 +2,28 @@
 
 Fast and reliable single-machine RPC library.
 
+**ZRPC** uses [ZeroMQ](https://zeromq.org/) for UNIX-socket based inter-process
+communication, and [MessagePack](https://msgpack.org/) for serialization.
+
+Unlike many network-oriented RPC frameworks, ZRPC is optimized for
+single-machine usage by completely bypassing TCP/IP and using UNIX-sockets
+instead.
+
+
+### Pros:
+
+- minimal setup - *server name* is used as identifier
+- minimal serialization/transport/deserialization overhead
+- simple RPC model - call a remote procedure and wait for return value
+  or timeout error
+
+
+### Cons:
+
+- no out-of-the-box asynchronous RPC calls
+- not usable in networking environment (at least without `socat` hacks)
+- RPC-only - no support for Publish-Subscribe or any other network architecture
+
 
 ## Usage:
 
@@ -10,6 +32,7 @@ See `example/` directory for runnable example.
 
 ### Example server:
 
+```python
     from zrpc.server import Server, rpc_method
 
     class TestServer(Server):
@@ -19,10 +42,12 @@ See `example/` directory for runnable example.
             return 'func', arg, kwarg
 
     TestServer(name='test_server').run()
+```
 
 
 ### Example client:
 
+```python
     from zrpc.client import Client
 
     client = Client()
@@ -31,6 +56,7 @@ See `example/` directory for runnable example.
                            args=('haha',),
                            kwargs={'kwarg': 'brt'})
     print('RPC response [%s]: %s' % (timestamp, response))
+```
 
 
 ## API:
