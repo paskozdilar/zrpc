@@ -120,6 +120,11 @@ class Server:
             time.sleep(0.5)
 
         try:
+            os.chmod(socket_dir, 0o777)
+        except OSError:
+            pass
+
+        try:
             os.chmod(socket_path, 0o777)
         except OSError:
             pass
