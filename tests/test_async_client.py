@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import multiprocessing
 import sys
 import tempfile
@@ -76,8 +77,8 @@ def test_reliability_client(socket_dir):
     assert crash_event.wait(1)
     multiprocessing.Process(target=run_server, daemon=True).start()
 
-    # Wait 5 seconds for retry
-    assert rpc_event.wait(5)
+    # Wait 3 seconds for retry
+    assert rpc_event.wait(3)
 
 
 def test_reliability_server(socket_dir):
@@ -265,6 +266,7 @@ def test_server_cache(socket_dir):
 def test_client_multicall(socket_dir):
 
     def run_server(name):
+
         class MockServer(Server):
             @rpc_method
             def mock_method(self):
@@ -272,20 +274,21 @@ def test_client_multicall(socket_dir):
                 return {'success': True}
         MockServer(name=name, socket_dir=socket_dir).run()
 
-    number_of_servers = 5
+    number_of_servers = 10
 
     for i in range(number_of_servers):
         multiprocessing.Process(target=run_server,
                                 args=['mock_server_' + str(i)],
                                 daemon=True).start()
 
+    start_event = multiprocessing.Event()
     success_event = multiprocessing.Event()
 
     def run_client():
         async def coro():
             client = Client(socket_dir=socket_dir)
 
-            start_time = time.monotonic()
+            start_event.set()
             responses = await asyncio.gather(
                 *[client.call(server='mock_server_' + str(i),
                               method='mock_method')
@@ -294,7 +297,8 @@ def test_client_multicall(socket_dir):
             for response in responses:
                 assert response['success']
             success_event.set()
-        asyncio.run(coro())
+        asyncio.run(coro(), debug=True)
 
     multiprocessing.Process(target=run_client, daemon=True).start()
-    assert success_event.wait(timeout=0.125)
+    start_event.wait()
+    assert success_event.wait(timeout=0.5)
