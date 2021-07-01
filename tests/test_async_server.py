@@ -223,12 +223,12 @@ def test_server_cache(socket_dir):
                     counter.value += 1
                     return {'success': True}
             await MockServer(socket_dir=socket_dir).run()
-        asyncio.run(coro(), debug=True)
+        asyncio.run(coro())
 
     multiprocessing.Process(target=run_server, daemon=True).start()
 
     # Retry 10 times
-    client = Client(socket_dir=socket_dir, retry_timeout=0.1)
+    client = Client(socket_dir=socket_dir)
     response = client.call(server='mock_server',
                            method='mock_method',
                            timeout=1)
