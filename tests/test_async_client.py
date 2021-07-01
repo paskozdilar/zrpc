@@ -260,3 +260,41 @@ def test_server_cache(socket_dir):
         # Assert method executed only once
         assert counter.value == 1
     asyncio.run(coro())
+
+
+def test_client_multicall(socket_dir):
+
+    def run_server(name):
+        class MockServer(Server):
+            @rpc_method
+            def mock_method(self):
+                time.sleep(0.1)
+                return {'success': True}
+        MockServer(name=name, socket_dir=socket_dir).run()
+
+    number_of_servers = 5
+
+    for i in range(number_of_servers):
+        multiprocessing.Process(target=run_server,
+                                args=['mock_server_' + str(i)],
+                                daemon=True).start()
+
+    success_event = multiprocessing.Event()
+
+    def run_client():
+        async def coro():
+            client = Client(socket_dir=socket_dir)
+
+            start_time = time.monotonic()
+            responses = await asyncio.gather(
+                *[client.call(server='mock_server_' + str(i),
+                              method='mock_method')
+                  for i in range(number_of_servers)]
+            )
+            for response in responses:
+                assert response['success']
+            success_event.set()
+        asyncio.run(coro())
+
+    multiprocessing.Process(target=run_client, daemon=True).start()
+    assert success_event.wait(timeout=0.125)

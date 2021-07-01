@@ -219,30 +219,36 @@ def test_server_cache(socket_dir):
             class MockServer(Server):
                 @rpc_method
                 async def mock_method(self):
-                    asyncio.sleep(0.1)
+                    await asyncio.sleep(0.1)
                     counter.value += 1
                     return {'success': True}
             await MockServer(socket_dir=socket_dir).run()
-        asyncio.run(coro())
+        asyncio.run(coro(), debug=True)
 
     multiprocessing.Process(target=run_server, daemon=True).start()
 
     # Retry 10 times
-    client = Client(socket_dir=socket_dir, retry_timeout=0.01)
-    client.call(server='mock_server', method='mock_method', timeout=1)
+    client = Client(socket_dir=socket_dir, retry_timeout=0.1)
+    response = client.call(server='mock_server',
+                           method='mock_method',
+                           timeout=1)
+
+    assert response['success']
 
     # Assert method executed only once
     assert counter.value == 1
 
 
-def test_multiple_methods(socket_dir):
+def test_server_multicall(socket_dir):
 
     def run_server():
         async def coro():
             class MockServer(Server):
                 @rpc_method
                 async def mock_method(self):
+                    logging.info('Calling mock method - sleep...')
                     asyncio.sleep(0.1)
+                    logging.info('Calling mock method - reply...')
                     return {'success': True}
             await MockServer(socket_dir=socket_dir).run()
         asyncio.run(coro())
@@ -256,7 +262,7 @@ def test_multiple_methods(socket_dir):
         client = Client(socket_dir=socket_dir)
         barrier.wait(timeout=1)
 
-        response = client.call(server='mock_server', method='mock_method', timeout=0.1*number_of_clients)
+        response = client.call(server='mock_server', method='mock_method', timeout=0.01)
         assert response['success']
 
         barrier.wait(timeout=1)
