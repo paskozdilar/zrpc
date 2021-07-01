@@ -1,5 +1,5 @@
 """
-Synchronous ZRPC client.
+Asynchronous ZRPC client.
 
 Instantiate this class and use the `.call` method to call an RPC method.
 """
@@ -9,6 +9,7 @@ import os
 import time
 import uuid
 import zmq
+import zmq.asyncio
 from zrpc.exceptions import (
         ConnectError,
         RPCError,
@@ -24,11 +25,11 @@ class Client:
     def __init__(self, socket_dir=None, retry_timeout=None):
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
-        context = zmq.Context.instance()
+        context = zmq.asyncio.Context.instance()
         sockets = {}
 
         self._context = context
-        self._poller = zmq.Poller()
+        self._poller = zmq.asyncio.Poller()
         self._sockets = sockets
 
         self._socket_dir = socket_dir
@@ -77,7 +78,7 @@ class Client:
         self._poller.unregister(socket)
         logger.debug('Disconnected from "%s"', socket_name)
 
-    def call(self, server, method, args=(), kwargs={}, timeout=None):
+    async def call(self, server, method, args=(), kwargs={}, timeout=None):
         """
         Call an RPC method of a server with args and kwargs.
         If `timeout` is None, blocks indefinitely.
@@ -106,7 +107,7 @@ class Client:
             socket.send(request)
             timeout_ms = 1000 * max(0, min(retry_timeout, timeout - elapsed_time))
             logger.debug('Polling sockets with %s ms timeout', timeout_ms)
-            events = dict(self._poller.poll(timeout=timeout_ms))
+            events = dict(await self._poller.poll(timeout=timeout_ms))
 
             if socket in events:
                 break
@@ -122,7 +123,7 @@ class Client:
         if socket not in events:
             raise RPCTimeoutError('Service "%s" not responding' % server)
 
-        response_data = socket.recv()
+        response_data = await socket.recv()
         response = deserialize(response_data)
         [response_id, payload, is_exception] = response
 
