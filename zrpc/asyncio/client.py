@@ -2,6 +2,21 @@
 Asynchronous ZRPC client.
 
 Instantiate this class and use the `.call` method to call an RPC method.
+
+User API:
+
+  Client:
+    |- call(server, method, args=(), kwargs={}, timeout=None)
+    |- list()
+    |- get_proxy(timeout=None)
+
+  Proxy:
+
+    >> Proxy().example_server.example_method[3](*args, **kwargs)
+    is equivalent to:
+    >> Client().call("example_server", "example_method", args, kwargs, timeout=3)
+
+    The "[3]" can be ommited, in which case, timeout is None.
 """
 
 import asyncio
