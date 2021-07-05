@@ -38,10 +38,14 @@ def test_basic_rpc(socket_dir):
                 rpc_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [multiprocessing.Process(target=run_server, daemon=True),
+          multiprocessing.Process(target=run_client, daemon=True)]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(1)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_reliability_client(socket_dir):
@@ -72,13 +76,20 @@ def test_reliability_client(socket_dir):
                 rpc_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    server_process = multiprocessing.Process(target=run_server, daemon=True)
+    client_process = multiprocessing.Process(target=run_client, daemon=True)
+    [p.start() for p in (server_process, client_process)]
+
     assert crash_event.wait(1)
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    server_process.join()
+    server_process = multiprocessing.Process(target=run_server, daemon=True)
+    server_process.start()
 
     # Wait 3 seconds for retry
     assert rpc_event.wait(3)
+
+    [p.terminate() for p in (server_process, client_process)]
+    [p.join() for p in (server_process, client_process)]
 
 
 def test_reliability_server(socket_dir):
@@ -108,7 +119,8 @@ def test_reliability_server(socket_dir):
                 rpc_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    server_process = multiprocessing.Process(target=run_server, daemon=True)
+    server_process.start()
     client_process = multiprocessing.Process(target=run_client, daemon=True)
     client_process.start()
 
@@ -117,10 +129,14 @@ def test_reliability_server(socket_dir):
     client_process.join()
     client_crash_event.set()
 
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    client_process = multiprocessing.Process(target=run_client, daemon=True)
+    client_process.start()
 
     # Wait 5 seconds for retry
     assert rpc_event.wait(5)
+
+    [p.terminate() for p in (server_process, client_process)]
+    [p.join() for p in (server_process, client_process)]
 
 
 def test_args_kwargs(socket_dir):
@@ -152,10 +168,14 @@ def test_args_kwargs(socket_dir):
                 rpc_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [multiprocessing.Process(target=run_server, daemon=True),
+          multiprocessing.Process(target=run_client, daemon=True)]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(5)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_multiprocessing(socket_dir):
@@ -180,10 +200,14 @@ def test_multiprocessing(socket_dir):
                 rpc_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [multiprocessing.Process(target=run_server, daemon=True),
+          multiprocessing.Process(target=run_client, daemon=True)]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(1)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_client_timeout(socket_dir):
@@ -201,9 +225,13 @@ def test_client_timeout(socket_dir):
                 client_event.set()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    p = multiprocessing.Process(target=run_client, daemon=True)
+    p.start()
 
     assert client_event.wait(1)
+
+    p.terminate()
+    p.join()
 
 
 def test_server_restart(socket_dir):
@@ -224,9 +252,10 @@ def test_server_restart(socket_dir):
             with server:
                 server.run_once()
 
-    multiprocessing.Process(target=run_server_n_times,
-                            args=[number_of_restarts],
-                            daemon=True).start()
+    p = multiprocessing.Process(target=run_server_n_times,
+                                args=[number_of_restarts],
+                                daemon=True)
+    p.start()
 
     for i in range(number_of_restarts):
         async def coro():
@@ -234,6 +263,9 @@ def test_server_restart(socket_dir):
             response = await client.call('mock_server', 'mock_method', timeout=3)
             assert response['success']
         asyncio.run(coro())
+
+    p.terminate()
+    p.join()
 
 
 def test_server_cache(socket_dir):
@@ -251,7 +283,8 @@ def test_server_cache(socket_dir):
     def run_server():
         MockServer(socket_dir=socket_dir).run()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    p = multiprocessing.Process(target=run_server, daemon=True)
+    p.start()
 
     # Retry 10 times
     async def coro():
@@ -261,6 +294,9 @@ def test_server_cache(socket_dir):
         # Assert method executed only once
         assert counter.value == 1
     asyncio.run(coro())
+
+    p.terminate()
+    p.join()
 
 
 def test_client_multicall(socket_dir):
@@ -276,10 +312,13 @@ def test_client_multicall(socket_dir):
 
     number_of_servers = 10
 
-    for i in range(number_of_servers):
+    server_processes = [
         multiprocessing.Process(target=run_server,
                                 args=['mock_server_' + str(i)],
-                                daemon=True).start()
+                                daemon=True)
+        for i in range(number_of_servers)
+    ]
+    [p.start() for p in server_processes]
 
     start_event = multiprocessing.Event()
     success_event = multiprocessing.Event()
@@ -299,6 +338,10 @@ def test_client_multicall(socket_dir):
             success_event.set()
         asyncio.run(coro(), debug=True)
 
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    client_process = multiprocessing.Process(target=run_client, daemon=True)
+    client_process.start()
     start_event.wait()
-    assert success_event.wait(timeout=0.5)
+    assert success_event.wait(0.5)
+
+    [p.terminate() for p in server_processes + [client_process]]
+    [p.join() for p in server_processes + [client_process]]

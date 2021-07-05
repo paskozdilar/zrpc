@@ -38,10 +38,14 @@ def test_basic_rpc(socket_dir):
         if response['success']:
             rpc_event.set()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [multiprocessing.Process(target=run_server, daemon=True),
+          multiprocessing.Process(target=run_client, daemon=True)]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(1)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_reliability_client(socket_dir):
@@ -70,13 +74,20 @@ def test_reliability_client(socket_dir):
         if response['success']:
             rpc_event.set()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    pserver = multiprocessing.Process(target=run_server, daemon=True)
+    pclient = multiprocessing.Process(target=run_client, daemon=True)
+    pserver.start()
+    pclient.start()
     assert crash_event.wait(1)
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    pserver.join()
+    pserver = multiprocessing.Process(target=run_server, daemon=True)
+    pserver.start()
 
     # Wait 5 seconds for retry
     assert rpc_event.wait(5)
+
+    [p.terminate() for p in (pserver, pclient)]
+    [p.join() for p in (pserver, pclient)]
 
 
 def test_reliability_server(socket_dir):
@@ -104,19 +115,24 @@ def test_reliability_server(socket_dir):
         if response['success']:
             rpc_event.set()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    client_process = multiprocessing.Process(target=run_client, daemon=True)
-    client_process.start()
+    pserver = multiprocessing.Process(target=run_server, daemon=True)
+    pserver.start()
+    pclient = multiprocessing.Process(target=run_client, daemon=True)
+    pclient.start()
 
     assert server_recv_event.wait(1)
-    client_process.kill()
-    client_process.join()
+    pclient.kill()
+    pclient.join()
     client_crash_event.set()
 
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    pclient = multiprocessing.Process(target=run_client, daemon=True)
+    pclient.start()
 
     # Wait 5 seconds for retry
     assert rpc_event.wait(5)
+
+    [p.terminate() for p in (pclient, pserver)]
+    [p.join() for p in (pclient, pserver)]
 
 
 def test_args_kwargs(socket_dir):
@@ -146,10 +162,14 @@ def test_args_kwargs(socket_dir):
         if response['success']:
             rpc_event.set()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [multiprocessing.Process(target=run_server, daemon=True),
+          multiprocessing.Process(target=run_client, daemon=True)]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(5)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_multiprocessing(socket_dir):
@@ -174,10 +194,16 @@ def test_multiprocessing(socket_dir):
         if response['success']:
             rpc_event.set()
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
-    multiprocessing.Process(target=run_client, daemon=True).start()
+    ps = [
+        multiprocessing.Process(target=run_server, daemon=True),
+        multiprocessing.Process(target=run_client, daemon=True),
+    ]
+    [p.start() for p in ps]
 
     assert rpc_event.wait(1)
+
+    [p.terminate() for p in ps]
+    [p.join() for p in ps]
 
 
 def test_server_restart(socket_dir):
@@ -199,14 +225,18 @@ def test_server_restart(socket_dir):
                     await server.run_once()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server_n_times,
-                            args=[number_of_restarts],
-                            daemon=True).start()
+    p = multiprocessing.Process(target=run_server_n_times,
+                                args=[number_of_restarts],
+                                daemon=True)
+    p.start()
 
     for i in range(number_of_restarts):
         client = Client(socket_dir=socket_dir)
         response = client.call('mock_server', 'mock_method', timeout=3)
         assert response['success']
+
+    p.terminate()
+    p.join()
 
 
 def test_server_cache(socket_dir):
@@ -225,7 +255,8 @@ def test_server_cache(socket_dir):
             await MockServer(socket_dir=socket_dir).run()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    p = multiprocessing.Process(target=run_server, daemon=True)
+    p.start()
 
     # Retry 10 times
     client = Client(socket_dir=socket_dir)
@@ -237,6 +268,9 @@ def test_server_cache(socket_dir):
 
     # Assert method executed only once
     assert counter.value == 1
+
+    p.terminate()
+    p.join()
 
 
 def test_server_multicall(socket_dir):
@@ -253,7 +287,8 @@ def test_server_multicall(socket_dir):
             await MockServer(socket_dir=socket_dir).run()
         asyncio.run(coro())
 
-    multiprocessing.Process(target=run_server, daemon=True).start()
+    server_process = multiprocessing.Process(target=run_server, daemon=True)
+    server_process.start()
 
     number_of_clients = 10
     barrier = multiprocessing.Barrier(number_of_clients+1)
@@ -262,7 +297,7 @@ def test_server_multicall(socket_dir):
         client = Client(socket_dir=socket_dir)
         barrier.wait(timeout=1)
 
-        response = client.call(server='mock_server', method='mock_method', timeout=0.01)
+        response = client.call(server='mock_server', method='mock_method', timeout=0.1)
         assert response['success']
 
         barrier.wait(timeout=1)
@@ -275,3 +310,6 @@ def test_server_multicall(socket_dir):
     barrier.wait(timeout=1)
     barrier.wait(timeout=1)
     [process.join(timeout=1) for process in client_processes]
+
+    server_process.terminate()
+    server_process.join()
