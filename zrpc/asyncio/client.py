@@ -55,6 +55,9 @@ class Client:
         self.__response_lock = asyncio.Lock()
         self.__response_queues = collections.defaultdict(asyncio.Queue)
 
+        self.__socket_handler = {}
+        self.__socket_call_count = collections.defaultdict(int)
+
         try:
             os.makedirs(socket_dir, exist_ok=True)
             for socket_name in os.listdir(socket_dir):
@@ -112,7 +115,6 @@ class Client:
         socket = sockets[server]
 
         request_id = str(uuid.uuid4())
-        token = request_id[:6].encode()
         request = serialize([request_id, method, args, kwargs])
 
         start_time = time.monotonic()
@@ -123,14 +125,19 @@ class Client:
         retry_timeout = self._retry_timeout
 
         queue = asyncio.Queue(maxsize=1)
-        self.__response_queues[token] = queue
+        self.__response_queues[request_id] = queue
+
+        self.__socket_call_count[server] += 1
+        if self.__socket_call_count[server] == 1:
+            socket_handler = asyncio.get_running_loop().create_task(
+                self.__handle_response(timeout, socket)
+            )
+            self.__socket_handler[server] = socket_handler
+        else:
+            socket_handler = self.__socket_handler[server]
 
         while elapsed_time <= timeout:
-            socket.send_multipart([token, b'', request])
-            handle_response_task = asyncio.get_running_loop().create_task(self.__handle_response(timeout, socket))
-
-            # Allow scheduler to start handler
-            await asyncio.sleep(0)
+            socket.send_multipart([b'', request])
 
             timeout_ms = 1000 * max(0, min(retry_timeout, timeout - elapsed_time))
 
@@ -139,38 +146,51 @@ class Client:
                 response_data = await asyncio.wait_for(queue.get(), timeout=timeout_ms/1000)
 
             except asyncio.TimeoutError:
-                handle_response_task.cancel()
                 logger.error('No response from "%s" - reconnecting...' % server)
                 self.__disconnect(server)
                 self.__connect(server)
                 socket = sockets[server]
+                socket_handler.cancel()
+                socket_handler = asyncio.get_running_loop().create_task(
+                    self.__handle_response(timeout, socket)
+                )
+                self.__socket_handler[server] = socket_handler
 
             else:
-                response_id, payload, is_exception = deserialize(response_data)
+                response_id, payload, is_exception = response_data
 
                 if request_id != response_id:
+                    self.__response_queues.pop(request_id, None)
                     raise RPCError('Internal error (request ID does not match)')
 
                 if is_exception:
+                    self.__response_queues.pop(request_id, None)
                     raise RPCError(payload)
                 
                 return payload
 
             elapsed_time = time.monotonic() - start_time
 
-        self.__response_queues.pop(token, None)
+        self.__socket_call_count[server] -= 1
+        if self.__socket_call_count[server] == 0:
+            socket_handler.cancel()
+            self.__socket_handler.pop(server)
+
+        self.__response_queues.pop(request_id, None)
         raise RPCTimeoutError('Service "%s" not responding' % server)
 
     async def __handle_response(self, timeout, socket):
-        async with self.__response_lock:
-            token, null, response_data = await socket.recv_multipart()
+        try:
+            while True:
+                null, response_data = await socket.recv_multipart()
+                response_id, payload, is_exception = deserialize(response_data)
 
-            if token in self.__response_queues:
-                queue = self.__response_queues[token]
-                try:
-                    queue.put_nowait(response_data)
-                except asyncio.QueueFull:
-                    pass
+                if response_id in self.__response_queues:
+                    self.__response_queues[response_id].put_nowait(
+                        (response_id, payload, is_exception)
+                    )
+        except asyncio.CancelledError:
+            return
 
     def list(self):
         return os.listdir(self._socket_dir)
