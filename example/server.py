@@ -19,6 +19,6 @@ def main():
 
 if __name__ == '__main__':
     try:
-        TestServer().run()
+        main()
     except KeyboardInterrupt:
         pass
