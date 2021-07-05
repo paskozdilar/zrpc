@@ -251,7 +251,10 @@ class Server:
 
     async def __handle_request(self, socket: zmq.Socket):
         async with self.__request_lock:
+            self.__logger.debug('Waiting for request...')
             token, null, request_data = await socket.recv_multipart()
+
+        self.__logger.debug('Got request: %s', token)
 
         if token in self.__cache:
             self.__logger.debug('Returning request from cache: %s', request_id)
