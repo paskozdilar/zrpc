@@ -207,10 +207,14 @@ class Server:
         socket = self.__socket
         poller = self.__poller
 
-        while True:
-            for socket, _ in await poller.poll():
-                data = await socket.recv_multipart()
-                asyncio.create_task(self.__handle_request(socket, data))
+        try:
+            while True:
+                for socket, _ in await poller.poll():
+                    data = await socket.recv_multipart()
+                    asyncio.create_task(self.__handle_request(socket, data))
+        finally:
+            if needs_stop:
+                self.stop()
 
     async def run_once(self):
         """ Handle a single round of requests. """
