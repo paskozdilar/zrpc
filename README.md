@@ -14,13 +14,11 @@ instead.
 
 - minimal setup - *server name* is used as identifier
 - minimal serialization/transport/deserialization overhead
-- simple RPC model - call a remote procedure and wait for return value
-  or timeout error
+- asynchronous RPC calls via `zrpc.asyncio`
 
 
 ### Cons:
 
-- no out-of-the-box asynchronous RPC calls
 - not usable in networking environment (at least without `socat` hacks)
 - RPC-only - no support for Publish-Subscribe or any other network architecture
 
@@ -58,6 +56,36 @@ See `example/` directory for runnable example.
     print('RPC response [%s]: %s' % (timestamp, response))
 ```
 
+---
+
+`zrpc.asyncio` equivalent:
+
+### Example asyncio server:
+
+```python
+    from zrpc.asyncio.server import Server, rpc_method
+
+    class TestServer(Server):
+        @rpc_method
+        async def func(self, arg, kwarg=None):
+            print('RPC request [%s]: arg %s, kwarg %s' (self.counter, arg, kwarg))
+            return 'func', arg, kwarg
+
+    asyncio.run(TestServer(name='test_server').run())
+```
+
+### Example asyncio client:
+
+```python
+    from zrpc.client import Client
+
+    client = Client()
+    response = asyncio.run(client.call(server='test_server',
+                                       method='func',
+                                       args=('haha',),
+                                       kwargs={'kwarg': 'brt'}))
+    print('RPC response [%s]: %s' % (timestamp, response))
+```
 
 ## API:
 
