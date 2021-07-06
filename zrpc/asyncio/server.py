@@ -82,7 +82,6 @@ class Server:
         self.__started = False
         self.__loop = asyncio.get_event_loop()
         self.__request_lock = asyncio.Lock()
-        self.__response_lock = asyncio.Lock()
         self.__cache_lock = asyncio.Lock()
 
     def __del__(self):
@@ -208,70 +207,41 @@ class Server:
         socket = self.__socket
         poller = self.__poller
 
-        poller.unregister(socket)
-        async def poll_zmq_socket():
-            while True:
-                await Server.__handle_request(self, socket)
+        while True:
+            for socket, _ in await poller.poll():
+                data = await socket.recv_multipart()
+                asyncio.create_task(self.__handle_request(socket, data))
+
+    async def run_once(self):
+        """ Handle a single round of requests. """
+        tasks = []
+        poller = self.__poller
+        for socket, _ in await poller.poll():
+            data = await socket.recv_multipart()
+            task = asyncio.create_task(self.__handle_request(socket, data))
+            tasks.append(task)
+        for task in tasks:
+            await task
+
+    async def __handle_request(self, socket: zmq.Socket, data: bytes):
+        token, null, request_data = data
 
         try:
-            poll_task = self.__loop.create_task(poll_zmq_socket())
+            request = deserialize(request_data)
+            [request_id, method_name, args, kwargs] = request
 
-            while self.__started:
-                await Server.run_once(self)
-        finally:
-            if not poll_task.done() and not poll_task.cancelled():
-                poll_task.cancel()
-            if needs_stop:
-                self.stop()
-
-    async def run_once(self, timeout=None):
-        """ Run service once (process single event or wait for timeout) """
-        if not self.__started:
-            raise RuntimeError('Server not started')
-
-        if timeout is not None:
-            timeout = int(1000 * timeout)
-
-        socket = self.__socket
-        poller = self.__poller
-
-        self.__logger.debug('Polling for requests...')
-        ready_sockets = dict(await poller.poll(timeout=timeout))
-        self.__logger.debug('Ready_sockets: %s', ready_sockets)
-
-        for ready_socket in ready_sockets:
-            if ready_socket is socket:
-                await Server.__handle_request(self, ready_socket)
-            else:
-                try:
-                    await self.__fd_callbacks[ready_socket]()
-                except KeyError:
-                    # Ignore socket that removes itself
-                    pass
-
-    async def __handle_request(self, socket: zmq.Socket):
-        async with self.__request_lock:
-            self.__logger.debug('Waiting for request...')
-            token, null, request_data = await socket.recv_multipart()
-
-        self.__logger.debug('Got request: %s', token)
-
-        if token in self.__cache:
-            self.__logger.debug('Returning request from cache: %s', request_id)
-            token, null, response_data, is_exception = await self.__cache[request_id]
+        except (SerializationError, ValueError) as exc:
+            self.__logger.error('Received malformed RPC request!')
+            response_data = str(exc)
+            is_exception = True
 
         else:
-            try:
-                request = deserialize(request_data)
-                [request_id, method_name, args, kwargs] = request
-
-            except (SerializationError, ValueError) as exc:
-                self.__logging.error('Received malformed RPC request!')
-                response_data = str(exc)
-                is_exception = True
+            if request_id in self.__cache:
+                self.__logger.debug('Returning request from cache')
+                token, null, response_data = await self.__cache[request_id]
 
             else:
-                self.__cache[request_id] = asyncio.get_running_loop().create_future()
+                self.__cache[request_id] = asyncio.Future()
 
                 try:
                     method = self._rpc_methods[method_name]
@@ -292,15 +262,16 @@ class Server:
                     else:
                         is_exception = False
 
-        self.__logger.debug('Serializing RPC response "%s"...',
-                            str(payload)[:50])
-        response = [request_id, payload, is_exception]
-        response_data = serialize(response)
-        self.__logger.debug('Sending RPC response "%s"...',
-                            str(response_data)[:50])
-        self.__cache[request_id].set_result([token, null, response_data, is_exception])
-        async with self.__response_lock:
-            await socket.send_multipart([token, null, response_data])
+                self.__logger.debug('Serializing RPC response "%s"...',
+                                    str(payload)[:50])
+                response = [request_id, payload, is_exception]
+                response_data = serialize(response)
+                self.__logger.debug('Sending RPC response "%s"...',
+                                    str(response_data)[:50])
+
+                if request_id in self.__cache:
+                    self.__cache[request_id].set_result([token, null, response_data])
+        await socket.send_multipart([token, null, response_data])
 
 
 class __RPCDecoratorClass:
