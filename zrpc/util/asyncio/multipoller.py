@@ -48,7 +48,7 @@ class Multipoller:
                 self.response_map.clear()
 
     async def _multipoll(self):
-        logger.info('Multipoll started.')
+        logger.debug('Multipoll started.')
         try:
             while True:
                 for socket, _ in await self.poller.poll():
@@ -56,7 +56,7 @@ class Multipoller:
                     [response_id, payload, is_exception] = deserialize(response_data)
                     self.response_map[response_id].put_nowait(response_data)
         except asyncio.CancelledError:
-            logger.info('Multipoll stopped.')
+            logger.debug('Multipoll stopped.')
 
     async def poll_and_recv(self, request_id: zmq.Socket):
         async with self:
