@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import sys
 import tempfile
 import time
@@ -243,3 +244,29 @@ def test_server_cache(socket_dir):
 
     # Assert method executed only once
     assert counter.value == 1
+
+
+def test_server_stop(socket_dir):
+
+    event = multiprocessing.Event()
+
+    class MockServer(Server):
+        @rpc_method
+        def mock_method(self):
+            pass
+        def __exit__(self, *args, **kwargs):
+            super().__exit__(*args, **kwargs)
+            event.set()
+
+    def run_server():
+        MockServer(socket_dir=socket_dir).run()
+
+    p = multiprocessing.Process(target=run_server, daemon=True)
+    p.start()
+
+    client = Client(socket_dir=socket_dir)
+    client.call(server='mock_server', method='mock_method', timeout=1)
+
+    os.kill(p.pid, 2)
+    p.join(timeout=1)
+    assert event.is_set()
