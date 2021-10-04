@@ -47,7 +47,7 @@ class Client:
         self._sockets = sockets
 
         self._socket_dir = socket_dir
-        self._retry_timeout = retry_timeout or 1
+        self._retry_timeout = retry_timeout or 3
 
         try:
             os.makedirs(socket_dir, exist_ok=True)
