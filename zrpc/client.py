@@ -120,13 +120,12 @@ class Client:
         while elapsed_time <= timeout:
             socket.send(request)
             timeout_ms = 1000 * max(0, min(retry_timeout, timeout - elapsed_time))
-            logger.debug('Polling sockets with %s ms timeout', timeout_ms)
             events = dict(self._poller.poll(timeout=timeout_ms))
 
             if socket in events:
                 break
 
-            logger.error('No response from "%s" - reconnecting...' % server)
+            logger.debug('No response from "%s" - reconnecting...' % server)
             self.__disconnect(server)
             self.__connect(server)
             socket = sockets[server]

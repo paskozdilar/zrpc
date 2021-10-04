@@ -212,9 +212,7 @@ class Server:
         socket = self.__socket
         poller = self.__poller
 
-        self.__logger.debug('Polling for requests...')
         ready_sockets = dict(poller.poll(timeout=timeout))
-        self.__logger.debug('Ready_sockets: %s', ready_sockets)
 
         for ready_socket in ready_sockets:
             if ready_socket is socket:
@@ -264,12 +262,8 @@ class Server:
             else:
                 is_exception = False
 
-        self.__logger.debug('Serializing RPC response "%s"...',
-                            str(payload)[:50])
         response = [request_id, payload, is_exception]
         response_data = serialize(response)
-        self.__logger.debug('Sending RPC response "%s"...',
-                            str(response_data)[:50])
         self.__cache[request_id] = response_data
         socket.send(response_data)
 
