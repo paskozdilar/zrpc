@@ -7,7 +7,7 @@ User API:
 
   Client:
     |- call(server, method, args=(), kwargs={}, timeout=None)
-    |- list()
+    |- list(server=None, timeout=None)
     |- get_proxy(timeout=None)
 
   Proxy:
@@ -148,7 +148,9 @@ class Client:
 
         return payload
 
-    def list(self):
+    def list(self, server = None, timeout = None):
+        if server is not None:
+            return self.call(server, method=None, timeout=timeout)
         return os.listdir(self._socket_dir)
 
     def get_proxy(self):

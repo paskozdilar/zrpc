@@ -111,8 +111,14 @@ def parse_args(argv=None):
                              nargs='*',
                              default=None)
 
-    call_parser = subparsers.add_parser(name='list',
+    list_parser = subparsers.add_parser(name='list',
                                         description='List available servers.')
+
+    list_parser.add_argument('server',
+                             help='List methods of a server',
+                             metavar='SERVER',
+                             nargs='?',
+                             default=None)
 
     arguments = parser.parse_args(argv)
 
@@ -156,9 +162,24 @@ def call(arguments):
 
 
 def list(arguments):
-    # TODO: add per-service method list
+    server = arguments.server
     client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
-    pprint.pprint(client.list())
+    result = client.list(server=server)
+    if server is not None:
+        for name, info in result.items():
+            docstring = info['docstring']
+            args_required = info['args_required']
+            args_optional = info['args_optional']
+            print(name + '(' + ', '.join([
+                *args_required,
+                *map('='.join,
+                     ([arg, str(default)]
+                      for arg, default in args_optional.items()))])
+                + '):')
+            print('\t' + docstring.strip())
+            print()
+    else:
+        pprint.pprint(result)
 
 
 if __name__ == '__main__':

@@ -97,14 +97,16 @@ class Client:
 
                 if is_exception:
                     raise RPCError(payload)
-                
+
                 return payload
 
             elapsed_time = time.monotonic() - start_time
 
         raise RPCTimeoutError('Service "%s" not responding' % server)
 
-    def list(self):
+    def list(self, server=None, timeout=None):
+        if server is not None:
+            return self.call(server=server, method=None, timeout=timeout)
         return os.listdir(self.socket_dir)
 
     def get_proxy(self):

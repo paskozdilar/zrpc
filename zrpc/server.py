@@ -21,6 +21,7 @@ User API:
 
 
 import collections
+import inspect
 import logging
 import os
 import re
@@ -140,6 +141,9 @@ class Server:
             self._rpc_methods = {}
 
         self.__logger.info('RPC methods: %s', list(self._rpc_methods.keys()))
+
+        # Add special case for list(server)
+        self._rpc_methods[None] = self.__class__.__list
 
         self.__context = context
         self.__socket_path = socket_path
@@ -266,6 +270,28 @@ class Server:
         response_data = serialize(response)
         self.__cache[request_id] = response_data
         socket.send(response_data)
+
+    def __list(self):
+        method_list = {}
+        for funcname in filter(bool, self._rpc_methods):
+            if funcname is not None:
+                method = getattr(self, funcname)
+                params = inspect.signature(method).parameters
+                method_list[funcname] = {
+                    'docstring': method.__doc__,
+                    'args_required': [
+                        arg
+                        for arg, param in params.items()
+                        if param.default is inspect.Parameter.empty
+                    ],
+                    'args_optional': {
+                        arg: param.default
+                        for arg, param in params.items()
+                        if param.default is not inspect.Parameter.empty
+                    }
+                }
+        return method_list
+
 
 
 class __RPCDecoratorClass:
