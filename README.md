@@ -1,5 +1,22 @@
 # zrpc
 
+- [Introduction](#introduction)
+  * [Pros](#pros)
+  * [Cons](#cons)
+- [Usage](#usage)
+  * [Example server](#example-server)
+  * [Example client](#example-client)
+  * [Example asyncio server](#example-asyncio-server)
+  * [Example asyncio client](#example-asyncio-client)
+  * [Example CLI client](#example-cli-client)
+- [API](#api)
+  * [Server](#server)
+  * [Client](#client)
+  * [CLI](#cli)
+
+
+## Introduction
+
 Fast and reliable single-machine RPC library.
 
 **ZRPC** uses [ZeroMQ](https://zeromq.org/) for UNIX-socket based inter-process
@@ -15,6 +32,7 @@ instead.
 - minimal setup - *server name* is used as identifier
 - minimal serialization/transport/deserialization overhead
 - asynchronous RPC calls via `zrpc.asyncio`
+- CLI interface for simple testing
 
 
 ### Cons:
@@ -36,7 +54,8 @@ See `example/` directory for runnable example.
     class TestServer(Server):
         @rpc_method
         def func(self, arg, kwarg=None):
-            print('RPC request [%s]: arg %s, kwarg %s' (self.counter, arg, kwarg))
+            """ Return tuple containing string 'func' and arguments 'arg' and 'kwarg' """
+            print('RPC request: arg %s, kwarg %s', (arg, kwarg))
             return 'func', arg, kwarg
 
     TestServer(name='test_server').run()
@@ -63,12 +82,14 @@ See `example/` directory for runnable example.
 ### Example asyncio server:
 
 ```python
+    import asyncio
     from zrpc.asyncio.server import Server, rpc_method
 
     class TestServer(Server):
         @rpc_method
         async def func(self, arg, kwarg=None):
-            print('RPC request [%s]: arg %s, kwarg %s' (self.counter, arg, kwarg))
+            """ Return tuple containing string 'func' and arguments 'arg' and 'kwarg' """
+            print('RPC request: arg %s, kwarg %s', (arg, kwarg))
             return 'func', arg, kwarg
 
     asyncio.run(TestServer(name='test_server').run())
@@ -86,6 +107,24 @@ See `example/` directory for runnable example.
                                        kwargs={'kwarg': 'brt'}))
     print('RPC response [%s]: %s' % (timestamp, response))
 ```
+
+
+### Example CLI client:
+
+Assuming we are running a `test_server` from one of server examples above:
+
+```bash
+    ~$ zrpc list
+    ['test_server']
+
+    ~$ zrpc list test_server
+    func(arg, kwarg=None):
+            Return tuple containing string 'func' and arguments 'arg' and 'kwarg'
+
+    ~$ zrpc call test_server func True kwarg=None
+    ['func', False, None]
+```
+
 
 ## API:
 
@@ -190,3 +229,59 @@ See `example/` directory for runnable example.
                 Number of seconds to wait for an RPC method to complete.
                 If exceeded, raises `RPCTimeoutError`.
                 If None, waits indefinitely.
+
+        list(server=None, timeout=None):
+            If `server` is `None`, return list of RPC servers currently online.
+            If `server` is not `None`, return dictionary:
+
+            {
+                <FUNCNAME>: {
+                    "docstring": <DOCSTRING>,
+                    "args_required": <POSITIONAL>,
+                    "args_optional": <KEYWORD>,
+                },
+                ...
+            }
+
+
+### CLI:
+
+    ### zrpc --help:
+
+    usage: zrpc [-h] [-d] {call,list} ...
+
+    CLI interface for ZRPC
+
+    optional arguments:
+      -h, --help   show this help message and exit
+      -d, --debug  Turn on debug logs
+
+
+    ### zrpc list --help:
+
+    usage: zrpc list [-h] [SERVER]
+
+    List available servers.
+
+    positional arguments:
+      SERVER      List methods of a server
+
+
+    ### zrpc call --help:
+
+    usage: zrpc call [-h] [-c COUNT] [-t TIMEOUT] SERVER METHOD [ARGS [ARGS ...]] [KWARGS [KWARGS ...]]
+
+    Call an RPC method.
+
+    positional arguments:
+      SERVER                Server name
+      METHOD                Method to call
+      ARGS                  Positional arguments (python object)
+      KWARGS                Keyword arguments (key=python object)
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -c COUNT, --count COUNT
+                            Send N requests ("inf" for loop)
+      -t TIMEOUT, --timeout TIMEOUT
+                            Time to wait for response before giving up
