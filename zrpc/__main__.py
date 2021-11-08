@@ -176,7 +176,7 @@ def list(arguments):
                      ([arg, str(default)]
                       for arg, default in args_optional.items()))])
                 + '):')
-            print('\t' + docstring.strip())
+            print('    ' + docstring.strip())
             print()
     else:
         pprint.pprint(result)
