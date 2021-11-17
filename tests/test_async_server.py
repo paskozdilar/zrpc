@@ -313,3 +313,29 @@ def test_server_multicall(socket_dir):
 
     server_process.terminate()
     server_process.join()
+
+
+def test_server_register(socket_dir):
+
+    queue = multiprocessing.Queue()
+    recv_event = multiprocessing.Event()
+
+    def run_server():
+        class TestServer(Server):
+            async def run(self):
+                self.register(queue._reader.fileno(), self.queue_event)
+                await super().run()
+            async def queue_event(self):
+                assert queue.get() == 'foo'
+                recv_event.set()
+        asyncio.run(TestServer(socket_dir=socket_dir).run())
+
+    p = multiprocessing.Process(target=run_server)
+    p.start()
+
+    queue.put('foo')
+    try:
+        assert recv_event.wait(timeout=1)
+    finally:
+        p.terminate()
+        p.join()

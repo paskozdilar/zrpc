@@ -270,3 +270,28 @@ def test_server_stop(socket_dir):
     os.kill(p.pid, 2)
     p.join(timeout=1)
     assert event.is_set()
+
+
+def test_server_register(socket_dir):
+
+    queue = multiprocessing.Queue()
+    recv_event = multiprocessing.Event()
+
+    def run_server():
+        class TestServer(Server):
+            def run(self):
+                self.register(queue._reader.fileno(), self.queue_event)
+                super().run()
+            def queue_event(self):
+                assert queue.get() == 'foo'
+                recv_event.set()
+        TestServer().run()
+
+    p = multiprocessing.Process(target=run_server)
+    p.start()
+
+    queue.put('foo')
+    assert recv_event.wait(1)
+
+    p.terminate()
+    p.join()
