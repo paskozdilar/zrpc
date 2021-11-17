@@ -81,9 +81,10 @@ class Server:
         self.__fd_callbacks = {}
 
         self.__started = False
-        self.__loop = asyncio.get_event_loop()
-        self.__request_lock = asyncio.Lock()
-        self.__cache_lock = asyncio.Lock()
+
+        self.__loop = None
+        self.__request_lock = None
+        self.__cache_lock = None
 
     def __del__(self):
         if self.__started:
@@ -139,7 +140,7 @@ class Server:
 
         self.__logger.debug('Success. %s', os.listdir(socket_dir))
 
-        poller.register(socket)
+        poller.register(socket, zmq.POLLIN)
         for fd in self.__fd_callbacks:
             poller.register(fd, zmq.POLLIN)
 
@@ -158,6 +159,12 @@ class Server:
 
         self.__cache = _RPCCache(maxsize=10)
         self.__started = True
+
+        self.__loop = asyncio.get_running_loop()
+
+        self.__request_lock = asyncio.Lock()
+        self.__cache_lock = asyncio.Lock()
+
 
     def stop(self):
         try:
@@ -213,9 +220,16 @@ class Server:
 
         try:
             while True:
-                for socket, _ in await poller.poll():
-                    data = await socket.recv_multipart()
-                    asyncio.create_task(self.__handle_request(socket, data))
+                for ready_socket, _ in await poller.poll():
+                    if ready_socket is socket:
+                        data = await socket.recv_multipart()
+                        asyncio.create_task(
+                            self.__handle_request(socket, data)
+                        )
+                    else:
+                        asyncio.create_task(
+                            self.__fd_callbacks[ready_socket]()
+                        )
         finally:
             if needs_stop:
                 self.stop()
