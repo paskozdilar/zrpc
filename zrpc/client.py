@@ -39,7 +39,7 @@ class Client:
     def __init__(self, socket_dir=None, retry_timeout=None):
         socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
 
-        context = zmq.Context.instance()
+        context = zmq.Context()
         sockets = {}
 
         self._context = context
@@ -60,6 +60,7 @@ class Client:
         try:
             for socket_name in list(self._sockets.keys()):
                 self.__disconnect(socket_name)
+            self._context.destroy(linger=0)
         except AttributeError:
             pass
 

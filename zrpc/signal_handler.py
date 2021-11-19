@@ -27,7 +27,7 @@ class SignalHandler:
         if not signums:
             raise TypeError('Must handle at least one signum')
 
-        context = zmq.Context.instance()
+        context = zmq.Context()
         signal_recv_socket = context.socket(zmq.PULL)
         signal_send_socket = context.socket(zmq.PUSH)
 

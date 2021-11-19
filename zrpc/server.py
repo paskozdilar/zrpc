@@ -102,7 +102,7 @@ class Server:
 
         self.__logger.info('Starting RPC server "%s"...', name)
 
-        context = zmq.Context.instance()
+        context = zmq.Context()
         socket = context.socket(zmq.REP)
         poller = zmq.Poller()
 
@@ -158,6 +158,7 @@ class Server:
             if not self.__started:
                 raise RuntimeError('Server not started')
             self.__socket.close(linger=0)
+            self.__context.destroy(linger=0)
             os.unlink(self.__socket_path)
         except (OSError, AttributeError):
             pass

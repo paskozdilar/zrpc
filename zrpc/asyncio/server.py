@@ -87,8 +87,11 @@ class Server:
         self.__cache_lock = None
 
     def __del__(self):
-        if self.__started:
-            Server.stop(self)
+        try:
+            if self.__started:
+                Server.stop(self)
+        except AttributeError:
+            pass
 
     def __enter__(self):
         Server.start(self)
@@ -171,6 +174,7 @@ class Server:
             if not self.__started:
                 raise RuntimeError('Server not started')
             self.__socket.close(linger=0)
+            self.__context.destroy(linger=0)
             os.unlink(self.__socket_path)
         except (OSError, AttributeError):
             pass

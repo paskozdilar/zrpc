@@ -45,13 +45,16 @@ class Client:
         self.socket_dir = os.path.abspath(socket_dir or '/tmp/zrpc_sockets')
         self.retry_timeout = retry_timeout or 1
 
-        self.context = zmq.asyncio.Context.instance()
+        self.context = zmq.asyncio.Context()
         self.poller = zmq.asyncio.Poller()
 
         self.connector = Connector(context=self.context,
                                    socket_dir=self.socket_dir,
                                    poller=self.poller)
         self.multipoller = Multipoller(self.poller)
+
+    def __del__(self):
+        self.context.destroy(linger=0)
 
     async def call(self, server, method, args=(), kwargs={}, timeout=None):
         """
