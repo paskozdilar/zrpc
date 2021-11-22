@@ -82,7 +82,6 @@ class Server:
 
         self.__started = False
 
-        self.__loop = None
         self.__request_lock = None
         self.__cache_lock = None
 
@@ -163,11 +162,8 @@ class Server:
         self.__cache = _RPCCache(maxsize=10)
         self.__started = True
 
-        self.__loop = asyncio.get_running_loop()
-
         self.__request_lock = asyncio.Lock()
         self.__cache_lock = asyncio.Lock()
-
 
     def stop(self):
         try:
