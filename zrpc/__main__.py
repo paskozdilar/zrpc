@@ -26,7 +26,7 @@ def main(argv=None):
         logging.basicConfig(level=logging.DEBUG
                             if arguments.debug
                             else logging.INFO)
-        globals()[arguments.command](arguments)
+        getattr(Commands, arguments.command)(arguments)
     except KeyboardInterrupt:
         pass
     except BrokenPipeError:
@@ -139,47 +139,67 @@ def parse_args(argv=None):
     return arguments
 
 
-def call(arguments):
-    server = arguments.server
-    method = arguments.method
-    args = arguments.args
-    kwargs = dict(arguments.kwargs)
-    timeout = arguments.timeout
-    count = arguments.count
+class Commands:
 
-    client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
+    @staticmethod
+    def call(arguments):
+        server = arguments.server
+        method = arguments.method
+        args = arguments.args
+        kwargs = dict(arguments.kwargs)
+        timeout = arguments.timeout
+        count = arguments.count
 
-    counter = 0
-    while counter < count:
-        response = client.call(server=server, 
-                               method=method,
-                               args=args, 
-                               kwargs=kwargs,
-                               timeout=timeout)
-        if response is not None:
-            pprint.pprint(response)
-        counter += 1
+        client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
 
+        counter = 0
+        while counter < count:
+            response = client.call(server=server, 
+                                   method=method,
+                                   args=args, 
+                                   kwargs=kwargs,
+                                   timeout=timeout)
+            if response is not None:
+                pprint.pprint(response)
+            counter += 1
 
-def list(arguments):
-    server = arguments.server
-    client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
-    result = client.list(server=server)
-    if server is not None:
-        for name, info in result.items():
-            docstring = info['docstring']
-            args_required = info['args_required']
-            args_optional = info['args_optional']
-            print(name + '(' + ', '.join([
-                *args_required,
-                *map('='.join,
-                     ([arg, str(default)]
-                      for arg, default in args_optional.items()))])
-                + '):')
-            print('    ' + docstring.strip())
-            print()
-    else:
-        pprint.pprint(result)
+    @staticmethod
+    def list(arguments):
+        server = arguments.server
+        client = Client(socket_dir=os.environ.get('ZRPC_SOCKET_DIR'))
+        result = client.list(server=server)
+        if server is not None:
+            for name, info in result.items():
+                docstring = info['docstring']
+                args_required = info['args_required']
+                args_optional = info['args_optional']
+
+                # Print method name and arguments
+                print(name + '(' + ', '.join([
+                    *args_required,
+                    *map('='.join,
+                         ([arg, str(default)]
+                          for arg, default in args_optional.items()))])
+                    + '):')
+
+                # Print docstring
+                lines = docstring.split('\n')
+                while lines and lines[0].strip() == '':
+                    lines.pop(0)
+                while lines and lines[-1].strip() == '':
+                    lines.pop(-1)
+                indent = os.path.commonprefix(
+                    list(line[:-len(line.lstrip())]
+                         for line in filter(str.strip, lines))
+                )
+
+                for line in lines:
+                    if line.startswith(indent):
+                        line = line[len(indent):]
+                    print('    ' + line)
+                print()
+        else:
+            pprint.pprint(result)
 
 
 if __name__ == '__main__':
