@@ -302,7 +302,7 @@ class Server:
                 method = getattr(self, funcname)
                 params = inspect.signature(method).parameters
                 method_list[funcname] = {
-                    'docstring': method.__doc__,
+                    'docstring': method.__doc__ or '',
                     'args_required': [
                         arg
                         for arg, param in params.items()
