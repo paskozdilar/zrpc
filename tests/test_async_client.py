@@ -345,3 +345,16 @@ def test_client_multicall(socket_dir):
 
     [p.terminate() for p in server_processes + [client_process]]
     [p.join() for p in server_processes + [client_process]]
+
+
+def test_thousand_failures(socket_dir):
+
+    async def run():
+        client = Client(socket_dir=socket_dir)
+        async def thousand_and_one_call():
+            for i in range(1001):
+                with pytest.raises(RPCTimeoutError):
+                    await client.call(server='foo', method='bar', timeout=0)
+        await asyncio.wait_for(thousand_and_one_call(), timeout=1)
+
+    asyncio.run(run())
