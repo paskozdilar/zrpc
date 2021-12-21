@@ -83,6 +83,7 @@ class Client:
             timeout_try = max(0,
                               min(self.retry_timeout,
                                   timeout - elapsed_time))
+
             try:
                 # Wait response
                 response_data = await asyncio.wait_for(
@@ -90,7 +91,7 @@ class Client:
                     timeout=timeout_try,
                 )
             except asyncio.TimeoutError:
-                pass
+                self.connector.reconnect(server)
             else:
                 # Parse response
                 response_id, payload, is_exception = deserialize(response_data)

@@ -260,7 +260,8 @@ class Server:
         else:
             if request_id in self.__cache:
                 self.__logger.debug('Returning request from cache')
-                token, null, response_data = await self.__cache[request_id]
+                # Ignoring token because client could have reconnected
+                _, null, response_data = await self.__cache[request_id]
 
             else:
                 self.__cache[request_id] = asyncio.Future()
@@ -293,6 +294,7 @@ class Server:
 
                 if request_id in self.__cache:
                     self.__cache[request_id].set_result([token, null, response_data])
+
         await socket.send_multipart([token, null, response_data])
 
     async def __list(self):
