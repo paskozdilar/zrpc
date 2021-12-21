@@ -25,14 +25,17 @@ class Multipoller:
         self.call_lock = None
         self.call_count = 0
         self.multipoller_task = None
+        self.multipoller_lock = None
 
         self.response_map = collections.defaultdict(asyncio.Queue)
 
     async def __aenter__(self):
         if self.call_lock is None:
             self.call_lock = asyncio.Lock()
+        if self.multipoller_lock is None:
+            self.multipoller_lock = asyncio.Lock()
 
-        async with self.call_lock:
+        async with self.call_lock, self.multipoller_lock:
             # If first caller, create poller task
             if self.call_count == 0:
                 self.multipoller_task = asyncio.create_task(self._multipoll())
@@ -43,8 +46,9 @@ class Multipoller:
             # If first caller, destroy poller task
             self.call_count -= 1
             if self.call_count == 0:
-                self.multipoller_task.cancel()
-                await self.multipoller_task
+                async with self.multipoller_lock:
+                    self.multipoller_task.cancel()
+                    await self.multipoller_task
                 self.response_map.clear()
 
     async def _multipoll(self):
@@ -61,3 +65,13 @@ class Multipoller:
     async def poll_and_recv(self, request_id: zmq.Socket):
         async with self:
             return await self.response_map[request_id].get()
+
+    async def reconnect(self):
+        if self.multipoller_lock is None:
+            self.multipoller_lock = asyncio.Lock()
+        async with self.multipoller_lock:
+            if self.multipoller_task is not None \
+                    and not self.multipoller_task.cancelled():
+                self.multipoller_task.cancel()
+                await self.multipoller_task
+                self.multipoller_task = asyncio.create_task(self._multipoll())

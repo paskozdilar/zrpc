@@ -49,8 +49,9 @@ class Client:
         self.poller = zmq.asyncio.Poller()
 
         self.connector = Connector(context=self.context,
-                                   socket_dir=self.socket_dir,
-                                   poller=self.poller)
+                                   poller=self.poller,
+                                   retry_timeout=self.retry_timeout,
+                                   socket_dir=self.socket_dir)
         self.multipoller = Multipoller(self.poller)
 
     def __del__(self):
@@ -73,18 +74,17 @@ class Client:
         start_time = time.monotonic()
         elapsed_time = 0
 
-        fail_count = 0
-
         while elapsed_time <= timeout:
-            # Send request
-            socket = self.connector.get_socket(server)
-            await self.connector.send(socket, request)
-
-            timeout_try = max(0,
-                              min(self.retry_timeout,
-                                  timeout - elapsed_time))
-
             try:
+                timeout_try = max(0,
+                                  min(self.retry_timeout,
+                                      timeout - elapsed_time))
+
+                # Send request
+                socket = self.connector.get_socket(server)
+                await asyncio.wait_for(self.connector.send(socket, request),
+                                       timeout=timeout_try)
+
                 # Wait response
                 response_data = await asyncio.wait_for(
                     self.multipoller.poll_and_recv(request_id),
@@ -92,6 +92,7 @@ class Client:
                 )
             except asyncio.TimeoutError:
                 self.connector.reconnect(server)
+                await self.multipoller.reconnect()
             else:
                 # Parse response
                 response_id, payload, is_exception = deserialize(response_data)

@@ -39,7 +39,7 @@ def test_client_multicall_reliability(socket_dir):
                     await asyncio.sleep(0.5)
                     return {"success": True}
             logging.info('Starting server')
-            await asyncio.get_event_loop().run_in_executor(executor, server_start.wait, 1)
+            await asyncio.get_running_loop().run_in_executor(executor, server_start.wait, 1)
             logging.info('Running server')
             await MockServer(name="mock_server", socket_dir=socket_dir).run()
         asyncio.run(coro())
@@ -48,7 +48,7 @@ def test_client_multicall_reliability(socket_dir):
         async def coro():
             client = Client(socket_dir=socket_dir, retry_timeout=1)
             async def subcoro(n):
-                await asyncio.get_event_loop().run_in_executor(executor, server_start.wait, 1)
+                await asyncio.get_running_loop().run_in_executor(executor, server_start.wait, 1)
 
                 logging.info('[%d] Call mock server', n)
                 result = await client.call('mock_server',
@@ -57,8 +57,8 @@ def test_client_multicall_reliability(socket_dir):
                 logging.info('[%d] Call mock server success', n)
                 assert result['success']
 
-                await asyncio.get_event_loop().run_in_executor(executor, client_success.wait, 1)
-                await asyncio.get_event_loop().run_in_executor(executor, server_start.wait, 1)
+                await asyncio.get_running_loop().run_in_executor(executor, client_success.wait, 1)
+                await asyncio.get_running_loop().run_in_executor(executor, server_start.wait, 1)
 
                 logging.info('[%d] Call mock server again', n)
                 result = await client.call('mock_server',
@@ -67,7 +67,7 @@ def test_client_multicall_reliability(socket_dir):
                 logging.info('[%d] Call mock server again success', n)
                 assert result['success']
 
-                await asyncio.get_event_loop().run_in_executor(executor, client_success.wait, 1)
+                await asyncio.get_running_loop().run_in_executor(executor, client_success.wait, 1)
 
             await asyncio.gather(*[subcoro(n) for n in range(number_of_clients)])
         asyncio.run(coro())
@@ -103,3 +103,51 @@ def test_client_multicall_reliability(socket_dir):
         server_process.join()
         client_process.join()
 
+
+def test_client_multicall_reconnect(socket_dir):
+
+    number_of_clients = 10
+
+    server_start = multiprocessing.Barrier(2)
+    client_success = multiprocessing.Barrier(number_of_clients+1)
+    executor = concurrent.futures.ThreadPoolExecutor(number_of_clients)
+
+    def run_server():
+        async def coro():
+            class MockServer(Server):
+                @rpc_method
+                async def mock_method(self, arg):
+                    logging.info('[%d] Server method start', arg)
+                    await asyncio.sleep(0.5)
+                    logging.info('[%d] Server method stop', arg)
+            await asyncio.get_running_loop().run_in_executor(executor, server_start.wait)
+            await MockServer(socket_dir=socket_dir).run()
+        asyncio.run(coro())
+
+    def run_client():
+        async def coro():
+            client = Client(socket_dir=socket_dir, retry_timeout=0.1)
+            async def subcoro(n):
+                logging.info('[%d] Request attempt', n)
+                await client.call(server='mock_server',
+                                  method='mock_method',
+                                  args=[n])
+                logging.info('[%d] Request success', n)
+                await asyncio.get_running_loop().run_in_executor(executor, client_success.wait)
+                logging.info('[%d] Request success confirmed', n)
+            await asyncio.gather(*[subcoro(n) for n in range(number_of_clients)])
+        asyncio.run(coro())
+
+    server_process = multiprocessing.Process(target=run_server)
+    client_process = multiprocessing.Process(target=run_client)
+    server_process.start()
+    client_process.start()
+
+    try:
+        server_start.wait(3)
+        client_success.wait(3)
+    finally:
+        server_process.terminate()
+        # client_process.terminate()
+        server_process.join()
+        client_process.join()
