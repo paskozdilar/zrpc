@@ -3,6 +3,7 @@
 - [Introduction](#introduction)
   * [Pros](#pros)
   * [Cons](#cons)
+- [Install](#install)
 - [Usage](#usage)
   * [Example server](#example-server)
   * [Example client](#example-client)
@@ -39,6 +40,21 @@ instead.
 
 - not usable in networking environment (at least without `socat` hacks)
 - RPC-only - no support for Publish-Subscribe or any other network architecture
+
+
+## Install:
+
+To install portable ZRPC CLI, run:
+
+```bash
+sudo make install
+```
+
+To uninstall it, run:
+
+```bash
+sudo make uninstall
+```
 
 
 ## Usage:
