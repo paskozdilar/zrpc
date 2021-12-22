@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import json
 import logging
 import os
 import pprint
@@ -56,6 +57,9 @@ def parse_args(argv=None):
     parser.add_argument('-d', '--debug',
                         help='Turn on debug logs',
                         action='store_true')
+    call_parser.add_argument('-j', '--json',
+                             help='Print output in JSON instead of Python object',
+                             action='store_true')
     call_parser.add_argument('-c', '--count',
                              help='Send N requests ("inf" for loop)',
                              default=1,
@@ -147,6 +151,7 @@ class Commands:
         method = arguments.method
         args = arguments.args
         kwargs = dict(arguments.kwargs)
+        _json = arguments.json
         timeout = arguments.timeout
         count = arguments.count
 
@@ -160,7 +165,10 @@ class Commands:
                                    kwargs=kwargs,
                                    timeout=timeout)
             if response is not None:
-                pprint.pprint(response)
+                if _json:
+                    print(json.dumps(response, indent=2))
+                else:
+                    pprint.pprint(response)
             counter += 1
 
     @staticmethod
